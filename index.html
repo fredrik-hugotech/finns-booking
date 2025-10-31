@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!--
+  This is a simple, static booking site for Sparebanken Norge Arena.
+  It is designed to mimic the visual style of Finns.Fairway using
+  similar colours and the official logo.  The page pulls in the
+  Supabase client from a CDN and uses client‑side JavaScript to
+  display available times, block pre‑booked slots and save new
+  bookings.  To connect the page to your Supabase project you must
+  edit the `SUPABASE_URL` and `SUPABASE_ANON_KEY` constants in
+  script.js.  There is no authentication; anyone can view and
+  create bookings.
+-->
+<html lang="no">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finns.Fairway – Sparebanken Norge Arena Booking</title>
+    <!-- Import the Supabase client library (UMD build). -->
+    <script src="https://unpkg.com/@supabase/supabase-js/umd/supabase.js"></script>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <img src="ff-logo-gronn.png" alt="Finns Fairway logo" class="logo" />
+      <div class="site-title">
+        <h1>Finns.Fairway</h1>
+        <p>For en trygg og aktiv oppvekst</p>
+      </div>
+    </header>
+    <main>
+      <section id="booking">
+        <h2>Book Sparebanken Norge Arena</h2>
+        <form class="booking-form" id="bookingForm" onsubmit="return false;">
+          <label for="date">Dato:</label>
+          <input type="date" id="date" required />
+
+          <label for="time">Tidspunkt:</label>
+          <select id="time"></select>
+
+          <label for="lane">Banetype:</label>
+          <select id="lane">
+            <option value="full">Full bane</option>
+            <option value="half">Halv bane</option>
+          </select>
+
+          <label for="name">Navn:</label>
+          <input type="text" id="name" placeholder="Fullt navn" />
+
+          <label for="contact">Kontakt:</label>
+          <input type="text" id="contact" placeholder="Telefon eller e‑post" />
+
+          <button type="submit" id="bookButton">Book</button>
+          <div id="message" class="message"></div>
+        </form>
+      </section>
+      <section id="calendar">
+        <h2>Tilgjengelige tider</h2>
+        <div id="calendarGrid" class="calendar-grid"></div>
+      </section>
+    </main>
+    <footer>
+      <p>&copy; <span id="year"></span> Finns.Fairway</p>
+    </footer>
+    <script src="script.js"></script>
+  </body>
+</html>
