@@ -7,11 +7,76 @@
 // TODO: Sett inn egne Supabase-nøkler før produksjon.
 const SUPABASE_URL = 'YOUR_SUPABASE_URL';
 const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_PLACEHOLDER_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_PLACEHOLDER_KEY = 'YOUR_SUPABASE_ANON_KEY';
 
-const supabaseClient =
-  SUPABASE_URL && SUPABASE_URL !== 'YOUR_SUPABASE_URL'
-    ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-    : null;
+function normaliseConfigValue(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function resolveSupabaseConfig() {
+  const candidates = [];
+
+  if (typeof window !== 'undefined') {
+    if (window.SUPABASE_URL || window.SUPABASE_ANON_KEY) {
+      candidates.push({ url: window.SUPABASE_URL, key: window.SUPABASE_ANON_KEY });
+    }
+
+    if (window.__SUPABASE_CONFIG) {
+      candidates.push(window.__SUPABASE_CONFIG);
+    }
+
+    const metaUrl = document.querySelector('meta[name="supabase-url"]');
+    const metaKey = document.querySelector('meta[name="supabase-anon-key"]');
+    if (metaUrl || metaKey) {
+      candidates.push({ url: metaUrl?.content, key: metaKey?.content });
+    }
+
+    const configScript = document.getElementById('supabase-config');
+    if (configScript?.textContent) {
+      try {
+        const parsed = JSON.parse(configScript.textContent);
+        candidates.push(parsed);
+      } catch (error) {
+        console.warn('Kunne ikke tolke Supabase-konfigurasjonen som JSON.', error);
+      }
+    }
+
+    const htmlDataset = document.documentElement?.dataset;
+    if (htmlDataset && (htmlDataset.supabaseUrl || htmlDataset.supabaseAnonKey)) {
+      candidates.push({ url: htmlDataset.supabaseUrl, key: htmlDataset.supabaseAnonKey });
+    }
+  }
+
+  candidates.push({ url: SUPABASE_URL, key: SUPABASE_ANON_KEY });
+
+  for (const candidate of candidates) {
+    const url = normaliseConfigValue(candidate?.url);
+    const key = normaliseConfigValue(candidate?.key);
+    if (
+      url &&
+      key &&
+      url !== SUPABASE_PLACEHOLDER_URL &&
+      key !== SUPABASE_PLACEHOLDER_KEY
+    ) {
+      return { url, key };
+    }
+  }
+
+  return null;
+}
+
+const resolvedSupabaseConfig = resolveSupabaseConfig();
+const supabaseClient = resolvedSupabaseConfig
+  ? supabase.createClient(resolvedSupabaseConfig.url, resolvedSupabaseConfig.key)
+  : null;
+
+if (!supabaseClient) {
+  console.warn(
+    'Supabase er ikke konfigurert. Legg inn URL og anon key i script.js, via '
+      + 'window.SUPABASE_URL/SUPABASE_ANON_KEY, data-attributter på <html> eller <meta> tagger.',
+  );
+}
 
 const availableTimes = [
   '08:00',
@@ -456,12 +521,42 @@ function isContactInfoComplete() {
   return contactFields.every((field) => field && field.value && field.value.trim().length > 0);
 }
 
+function getContactInfo() {
+  const info = {
+    name: nameInput?.value.trim() || '',
+    phone: phoneInput?.value.trim() || '',
+    email: emailInput?.value.trim() || '',
+    club: clubInput?.value.trim() || '',
+    gender: genderSelect?.value || '',
+  };
+
+  const ageRaw = ageInput?.value;
+  const parsedAge = ageRaw !== undefined && ageRaw !== null ? Number.parseInt(ageRaw, 10) : NaN;
+  if (Number.isNaN(parsedAge)) {
+    return { ok: false, message: 'Vennligst oppgi alder som et heltall.' };
+  }
+  if (parsedAge < 0 || parsedAge > 120) {
+    return { ok: false, message: 'Alder må være mellom 0 og 120 år.' };
+  }
+
+  return { ok: true, data: { ...info, age: parsedAge } };
+}
+
 function updateStepControls() {
   if (step1NextBtn) {
     step1NextBtn.disabled = selectedSlots.length === 0;
   }
   if (step2NextBtn) {
     step2NextBtn.disabled = !isContactInfoComplete();
+  }
+}
+
+function displaySummaryMessage(type, message) {
+  if (!summaryMessageBox) return;
+  summaryMessageBox.textContent = message;
+  summaryMessageBox.classList.remove('success', 'error');
+  if (type) {
+    summaryMessageBox.classList.add(type);
   }
 }
 
@@ -519,66 +614,69 @@ function focusDayPanel() {
 
 async function submitBooking() {
   if (isSubmitting) return;
-  summaryMessageBox.textContent = '';
-  summaryMessageBox.classList.remove('success', 'error');
+  displaySummaryMessage(null, '');
 
   if (selectedSlots.length === 0) {
-    summaryMessageBox.textContent = 'Du har ikke valgt noen tider.';
-    summaryMessageBox.classList.add('error');
+    displaySummaryMessage('error', 'Du har ikke valgt noen tider.');
     showStep(1);
     return;
   }
 
   if (!isContactInfoComplete()) {
-    summaryMessageBox.textContent = 'Vennligst fyll ut kontaktinformasjonen.';
-    summaryMessageBox.classList.add('error');
+    displaySummaryMessage('error', 'Vennligst fyll ut kontaktinformasjonen.');
     showStep(2);
+    return;
+  }
+
+  const contactInfoResult = getContactInfo();
+  if (!contactInfoResult.ok) {
+    displaySummaryMessage('error', contactInfoResult.message);
+    showStep(2);
+    return;
+  }
+
+  if (!supabaseClient) {
+    displaySummaryMessage(
+      'error',
+      'Kan ikke fullføre bestillingen fordi Supabase-nøkler mangler. Sett inn gyldig URL og anon key.',
+    );
     return;
   }
 
   // Sjekk tilgjengelighet igjen
   let unavailable = false;
 
-  if (supabaseClient) {
-    const monthCache = new Map();
-    const ensureMonthData = async (dateStr) => {
-      const dateObj = parseDate(dateStr);
-      if (Number.isNaN(dateObj.getTime())) {
-        return;
-      }
-      const key = `${dateObj.getFullYear()}-${dateObj.getMonth()}`;
-      if (monthCache.has(key)) {
-        monthBookings = monthCache.get(key);
-        return;
-      }
-      await loadMonthBookings(dateObj.getFullYear(), dateObj.getMonth());
-      monthCache.set(key, monthBookings.slice());
-    };
-
-    for (const slot of selectedSlots) {
-      // Sørg for at vi har ferske data fra Supabase for måneden før vi sjekker
-      await ensureMonthData(slot.date);
-      const { available } = getTimeStatus(slot.date, slot.time, { includePending: false });
-      const needed = slot.lane === 'full' ? 2 : 1;
-      if (available < needed) {
-        unavailable = true;
-        break;
-      }
+  const monthCache = new Map();
+  const ensureMonthData = async (dateStr) => {
+    const dateObj = parseDate(dateStr);
+    if (Number.isNaN(dateObj.getTime())) {
+      return;
     }
+    const key = `${dateObj.getFullYear()}-${dateObj.getMonth()}`;
+    if (monthCache.has(key)) {
+      monthBookings = monthCache.get(key);
+      return;
+    }
+    await loadMonthBookings(dateObj.getFullYear(), dateObj.getMonth());
+    monthCache.set(key, monthBookings.slice());
+  };
 
-    // Sett tilbake kalenderdataene til aktiv måned slik at visningen holder seg i synk
-    await ensureMonthData(formatDate(new Date(currentYear, currentMonth, 1)));
-  } else {
-    unavailable = selectedSlots.some((slot) => {
-      const { available } = getTimeStatus(slot.date, slot.time, { includePending: false });
-      const needed = slot.lane === 'full' ? 2 : 1;
-      return available < needed;
-    });
+  for (const slot of selectedSlots) {
+    // Sørg for at vi har ferske data fra Supabase for måneden før vi sjekker
+    await ensureMonthData(slot.date);
+    const { available } = getTimeStatus(slot.date, slot.time, { includePending: false });
+    const needed = slot.lane === 'full' ? 2 : 1;
+    if (available < needed) {
+      unavailable = true;
+      break;
+    }
   }
 
+  // Sett tilbake kalenderdataene til aktiv måned slik at visningen holder seg i synk
+  await ensureMonthData(formatDate(new Date(currentYear, currentMonth, 1)));
+
   if (unavailable) {
-    summaryMessageBox.textContent = 'En eller flere av de valgte tidene er ikke lenger tilgjengelige.';
-    summaryMessageBox.classList.add('error');
+    displaySummaryMessage('error', 'En eller flere av de valgte tidene er ikke lenger tilgjengelige.');
     return;
   }
 
@@ -587,35 +685,27 @@ async function submitBooking() {
     completeBookingBtn.disabled = true;
   }
 
-  if (supabaseClient) {
-    const insertData = selectedSlots.map((slot) => ({
-      date: slot.date,
-      time: slot.time,
-      lane: slot.lane,
-      name: nameInput?.value.trim() || '',
-      phone: phoneInput?.value.trim() || '',
-      email: emailInput?.value.trim() || '',
-      club: clubInput?.value.trim() || '',
-      gender: genderSelect?.value || '',
-      age: ageInput?.value.trim() || '',
-    }));
-    const { error } = await supabaseClient.from('bookings').insert(insertData);
-    if (error) {
-      console.error('Feil under lagring av bestilling:', error);
-      summaryMessageBox.textContent = 'Det oppstod en feil under lagring av bestillingen. Prøv igjen.';
-      summaryMessageBox.classList.add('error');
-      isSubmitting = false;
-      if (completeBookingBtn) {
-        completeBookingBtn.disabled = false;
-      }
-      return;
+  const contactInfo = contactInfoResult.data;
+  const insertData = selectedSlots.map((slot) => ({
+    date: slot.date,
+    time: slot.time,
+    lane: slot.lane,
+    ...contactInfo,
+  }));
+  const { error } = await supabaseClient.from('bookings').insert(insertData);
+  if (error) {
+    console.error('Feil under lagring av bestilling:', error);
+    displaySummaryMessage(
+      'error',
+      'Det oppstod en feil under lagring av bestillingen. Prøv igjen.',
+    );
+    isSubmitting = false;
+    if (completeBookingBtn) {
+      completeBookingBtn.disabled = false;
     }
-    await loadMonthBookings(currentYear, currentMonth);
-  } else {
-    selectedSlots.forEach((slot) => {
-      monthBookings.push({ date: slot.date, time: slot.time, lane: slot.lane });
-    });
+    return;
   }
+  await loadMonthBookings(currentYear, currentMonth);
 
   selectedSlots = [];
   if (customerForm) {
@@ -628,8 +718,7 @@ async function submitBooking() {
   renderWeekView();
   updateStepControls();
 
-  summaryMessageBox.textContent = 'Bestillingen er sendt! Vennligst betal via Vipps.';
-  summaryMessageBox.classList.add('success');
+  displaySummaryMessage('success', 'Bestillingen er sendt! Vennligst betal via Vipps.');
   isSubmitting = false;
   if (completeBookingBtn) {
     completeBookingBtn.disabled = false;
