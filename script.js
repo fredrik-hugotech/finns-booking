@@ -40,6 +40,12 @@ const timeSelect = document.getElementById('time');
 const laneSelect = document.getElementById('lane');
 const nameInput = document.getElementById('name');
 const contactInput = document.getElementById('contact');
+// Additional form elements for extended booking details
+const phoneInput = document.getElementById('phone');
+const emailInput = document.getElementById('email');
+const clubInput = document.getElementById('club');
+const genderSelect = document.getElementById('gender');
+const ageInput = document.getElementById('age');
 const bookButton = document.getElementById('bookButton');
 const messageBox = document.getElementById('message');
 const calendarGrid = document.getElementById('calendarGrid');
@@ -132,7 +138,12 @@ async function handleBooking() {
   const time = timeSelect.value;
   const lane = laneSelect.value;
   const name = nameInput.value.trim();
-  const contact = contactInput.value.trim();
+  // Collect extended booking details from the form
+  const phone = phoneInput.value.trim();
+  const email = emailInput.value.trim();
+  const club = clubInput.value.trim();
+  const gender = genderSelect.value;
+  const age = ageInput.value.trim();
   messageBox.textContent = '';
   messageBox.classList.remove('success', 'error');
 
@@ -146,8 +157,9 @@ async function handleBooking() {
     messageBox.classList.add('error');
     return;
   }
-  if (!contact) {
-    messageBox.textContent = 'Vennligst oppgi telefonnummer eller e‑post.';
+  // Require phone, email, club, gender and age to be provided
+  if (!phone || !email || !club || !gender || !age) {
+    messageBox.textContent = 'Vennligst oppgi telefonnummer, e‑post, klubb, kjønn og alder.';
     messageBox.classList.add('error');
     return;
   }
@@ -163,7 +175,7 @@ async function handleBooking() {
 
   if (!supabase) {
     // If there is no Supabase client configured, store booking only in memory.
-    bookings.push({ date, time, lane, name, contact });
+    bookings.push({ date, time, lane, name, phone, email, club, gender, age });
     renderCalendar();
     messageBox.textContent = 'Reservasjonen ble registrert (kun lokalt).';
     messageBox.classList.add('success');
@@ -171,7 +183,7 @@ async function handleBooking() {
   }
   // Insert the booking into Supabase
   const { error } = await supabase.from('bookings').insert([
-    { date, time, lane, name, contact }
+    { date, time, lane, name, phone, email, club, gender, age }
   ]);
   if (error) {
     console.error('Error creating booking:', error);
@@ -180,12 +192,16 @@ async function handleBooking() {
     return;
   }
   // Update local state and UI
-  bookings.push({ date, time, lane, name, contact });
+  bookings.push({ date, time, lane, name, phone, email, club, gender, age });
   renderCalendar();
-  // Clear form
+  // Clear form fields
   timeSelect.value = '';
   nameInput.value = '';
-  contactInput.value = '';
+  phoneInput.value = '';
+  emailInput.value = '';
+  clubInput.value = '';
+  genderSelect.value = '';
+  ageInput.value = '';
   messageBox.textContent = 'Reservasjonen ble registrert!';
   messageBox.classList.add('success');
 }
