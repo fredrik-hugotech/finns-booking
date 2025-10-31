@@ -4,10 +4,10 @@
  * og innsending av bestilling til Supabase dersom nøklene er satt.
  */
 
-// TODO: Sett inn egne Supabase-nøkler før produksjon.
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
-const SUPABASE_SERVICE_ROLE_KEY = 'YOUR_SUPABASE_SERVICE_ROLE_KEY';
+const SUPABASE_URL = 'https://bpbqcqqlqrdruxbottdn.supabase.co';
+const SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwYnFjcXFscXJkcnV4Ym90dGRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE5MDAzNTAsImV4cCI6MjA3NzQ3NjM1MH0.kxHA7ta7ld95-PDhVEDvkgxJ-BhHjI0Zn2fwWv7LFNc';
+const SUPABASE_SERVICE_ROLE_KEY = '';
 const SUPABASE_PLACEHOLDER_URL = 'YOUR_SUPABASE_URL';
 const SUPABASE_PLACEHOLDER_ANON = 'YOUR_SUPABASE_ANON_KEY';
 const SUPABASE_PLACEHOLDER_SERVICE_ROLE = 'YOUR_SUPABASE_SERVICE_ROLE_KEY';
