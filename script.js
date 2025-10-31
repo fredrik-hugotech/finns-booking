@@ -145,15 +145,23 @@ function resolveSupabaseConfig() {
 }
 
 const resolvedSupabaseConfig = resolveSupabaseConfig();
-const supabaseClient = resolvedSupabaseConfig
-  ? supabase.createClient(resolvedSupabaseConfig.url, resolvedSupabaseConfig.key, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
-    })
-  : null;
+const supabaseLibrary = typeof supabase !== 'undefined' ? supabase : null;
+const supabaseClient =
+  resolvedSupabaseConfig && supabaseLibrary
+    ? supabaseLibrary.createClient(resolvedSupabaseConfig.url, resolvedSupabaseConfig.key, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+          detectSessionInUrl: false,
+        },
+      })
+    : null;
+
+if (!supabaseLibrary) {
+  console.warn(
+    'Fant ikke supabase-klienten i nettleseren. Kontroller at https://unpkg.com/@supabase/supabase-js/ er tilgjengelig.',
+  );
+}
 
 if (!supabaseClient) {
   console.warn(
