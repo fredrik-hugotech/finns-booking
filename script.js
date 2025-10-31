@@ -210,43 +210,166 @@ let activeView = 'day';
 let activeStep = 1;
 let isSubmitting = false;
 
-// DOM-elementer
-const monthLabel = document.getElementById('monthLabel');
-const monthCalendar = document.getElementById('monthCalendar');
-const dayLabel = document.getElementById('dayLabel');
-const dayViewPanel = document.getElementById('dayView');
-const weekViewPanel = document.getElementById('weekView');
-const timesList = document.getElementById('timesList');
-const selectedSlotsContainer = document.getElementById('selectedSlots');
-const prevMonthBtn = document.getElementById('prevMonth');
-const nextMonthBtn = document.getElementById('nextMonth');
-const viewToggleButtons = document.querySelectorAll('[data-view]');
+// DOM-elementer (initialiseres når DOM er klar)
+let monthLabel;
+let monthCalendar;
+let dayLabel;
+let dayViewPanel;
+let weekViewPanel;
+let timesList;
+let selectedSlotsContainer;
+let prevMonthBtn;
+let nextMonthBtn;
+let viewToggleButtons = [];
 
-const stepElements = Array.from(document.querySelectorAll('.flow-step'));
-const progressSteps = Array.from(document.querySelectorAll('.progress-step'));
-const step1NextBtn = document.getElementById('step1Next');
-const step2BackBtn = document.getElementById('step2Back');
-const step2NextBtn = document.getElementById('step2Next');
-const step3BackBtn = document.getElementById('step3Back');
-const completeBookingBtn = document.getElementById('completeBooking');
+let stepElements = [];
+let progressSteps = [];
+let step1NextBtn;
+let step2BackBtn;
+let step2NextBtn;
+let step3BackBtn;
+let completeBookingBtn;
 
-const nameInput = document.getElementById('name');
-const phoneInput = document.getElementById('phone');
-const emailInput = document.getElementById('email');
-const clubInput = document.getElementById('club');
-const genderSelect = document.getElementById('gender');
-const ageInput = document.getElementById('age');
-const customerForm = document.getElementById('customerForm');
-const summaryMessageBox = document.getElementById('summaryMessage');
+let nameInput;
+let phoneInput;
+let emailInput;
+let clubInput;
+let genderSelect;
+let ageInput;
+let customerForm;
+let summaryMessageBox;
+let yearSpan;
 
-const contactFields = [
-  nameInput,
-  phoneInput,
-  emailInput,
-  clubInput,
-  genderSelect,
-  ageInput,
-].filter(Boolean);
+let contactFields = [];
+
+let listenersAttached = false;
+
+function cacheDomReferences() {
+  monthLabel = document.getElementById('monthLabel');
+  monthCalendar = document.getElementById('monthCalendar');
+  dayLabel = document.getElementById('dayLabel');
+  dayViewPanel = document.getElementById('dayView');
+  weekViewPanel = document.getElementById('weekView');
+  timesList = document.getElementById('timesList');
+  selectedSlotsContainer = document.getElementById('selectedSlots');
+  prevMonthBtn = document.getElementById('prevMonth');
+  nextMonthBtn = document.getElementById('nextMonth');
+  viewToggleButtons = Array.from(document.querySelectorAll('[data-view]'));
+
+  stepElements = Array.from(document.querySelectorAll('.flow-step'));
+  progressSteps = Array.from(document.querySelectorAll('.progress-step'));
+  step1NextBtn = document.getElementById('step1Next');
+  step2BackBtn = document.getElementById('step2Back');
+  step2NextBtn = document.getElementById('step2Next');
+  step3BackBtn = document.getElementById('step3Back');
+  completeBookingBtn = document.getElementById('completeBooking');
+
+  nameInput = document.getElementById('name');
+  phoneInput = document.getElementById('phone');
+  emailInput = document.getElementById('email');
+  clubInput = document.getElementById('club');
+  genderSelect = document.getElementById('gender');
+  ageInput = document.getElementById('age');
+  customerForm = document.getElementById('customerForm');
+  summaryMessageBox = document.getElementById('summaryMessage');
+  yearSpan = document.getElementById('year');
+
+  contactFields = [
+    nameInput,
+    phoneInput,
+    emailInput,
+    clubInput,
+    genderSelect,
+    ageInput,
+  ].filter(Boolean);
+}
+
+function attachEventListeners() {
+  if (listenersAttached) {
+    return;
+  }
+  listenersAttached = true;
+
+  if (customerForm) {
+    customerForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+    });
+  }
+
+  if (prevMonthBtn) {
+    prevMonthBtn.addEventListener('click', async () => {
+      if (currentMonth === 0) {
+        currentMonth = 11;
+        currentYear -= 1;
+      } else {
+        currentMonth -= 1;
+      }
+      await loadMonthBookings(currentYear, currentMonth);
+      ensureActiveDateInMonth();
+      renderMonthCalendar();
+      renderDayView();
+      renderWeekView();
+    });
+  }
+
+  if (nextMonthBtn) {
+    nextMonthBtn.addEventListener('click', async () => {
+      if (currentMonth === 11) {
+        currentMonth = 0;
+        currentYear += 1;
+      } else {
+        currentMonth += 1;
+      }
+      await loadMonthBookings(currentYear, currentMonth);
+      ensureActiveDateInMonth();
+      renderMonthCalendar();
+      renderDayView();
+      renderWeekView();
+    });
+  }
+
+  viewToggleButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const view = button.dataset.view;
+      if (view) {
+        setActiveView(view);
+      }
+    });
+  });
+
+  if (step1NextBtn) {
+    step1NextBtn.addEventListener('click', () => {
+      if (!step1NextBtn.disabled) {
+        showStep(2);
+      }
+    });
+  }
+
+  if (step2BackBtn) {
+    step2BackBtn.addEventListener('click', () => showStep(1));
+  }
+
+  if (step2NextBtn) {
+    step2NextBtn.addEventListener('click', () => {
+      if (!step2NextBtn.disabled) {
+        showStep(3);
+      }
+    });
+  }
+
+  if (step3BackBtn) {
+    step3BackBtn.addEventListener('click', () => showStep(2));
+  }
+
+  if (completeBookingBtn) {
+    completeBookingBtn.addEventListener('click', submitBooking);
+  }
+
+  contactFields.forEach((field) => {
+    field.addEventListener('input', updateStepControls);
+    field.addEventListener('change', updateStepControls);
+  });
+}
 
 const weekdayNamesShort = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
 const monthNames = [
@@ -827,87 +950,10 @@ async function submitBooking() {
   }
 }
 
-if (customerForm) {
-  customerForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-  });
-}
+async function initialiseApp() {
+  cacheDomReferences();
+  attachEventListeners();
 
-if (prevMonthBtn) {
-  prevMonthBtn.addEventListener('click', async () => {
-    if (currentMonth === 0) {
-      currentMonth = 11;
-      currentYear -= 1;
-    } else {
-      currentMonth -= 1;
-    }
-    await loadMonthBookings(currentYear, currentMonth);
-    ensureActiveDateInMonth();
-    renderMonthCalendar();
-    renderDayView();
-    renderWeekView();
-  });
-}
-
-if (nextMonthBtn) {
-  nextMonthBtn.addEventListener('click', async () => {
-    if (currentMonth === 11) {
-      currentMonth = 0;
-      currentYear += 1;
-    } else {
-      currentMonth += 1;
-    }
-    await loadMonthBookings(currentYear, currentMonth);
-    ensureActiveDateInMonth();
-    renderMonthCalendar();
-    renderDayView();
-    renderWeekView();
-  });
-}
-
-viewToggleButtons.forEach((button) => {
-  button.addEventListener('click', () => {
-    const view = button.dataset.view;
-    if (view) {
-      setActiveView(view);
-    }
-  });
-});
-
-if (step1NextBtn) {
-  step1NextBtn.addEventListener('click', () => {
-    if (!step1NextBtn.disabled) {
-      showStep(2);
-    }
-  });
-}
-
-if (step2BackBtn) {
-  step2BackBtn.addEventListener('click', () => showStep(1));
-}
-
-if (step2NextBtn) {
-  step2NextBtn.addEventListener('click', () => {
-    if (!step2NextBtn.disabled) {
-      showStep(3);
-    }
-  });
-}
-
-if (step3BackBtn) {
-  step3BackBtn.addEventListener('click', () => showStep(2));
-}
-
-if (completeBookingBtn) {
-  completeBookingBtn.addEventListener('click', submitBooking);
-}
-
-contactFields.forEach((field) => {
-  field.addEventListener('input', updateStepControls);
-  field.addEventListener('change', updateStepControls);
-});
-
-(async function init() {
   await loadMonthBookings(currentYear, currentMonth);
   ensureActiveDateInMonth();
   renderMonthCalendar();
@@ -917,9 +963,20 @@ contactFields.forEach((field) => {
   updateSummary();
   updateStepControls();
   showStep(activeStep);
-})();
 
-const yearSpan = document.getElementById('year');
-if (yearSpan) {
-  yearSpan.textContent = new Date().getFullYear();
+  if (yearSpan) {
+    yearSpan.textContent = new Date().getFullYear();
+  }
+}
+
+function startApp() {
+  initialiseApp().catch((error) => {
+    console.error('Klarte ikke å initialisere bookingappen.', error);
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp, { once: true });
+} else {
+  startApp();
 }
