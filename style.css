@@ -76,7 +76,7 @@ main {
   gap: clamp(1.5rem, 3vw, 2.75rem);
 }
 
-.flow-intro h2 {
+.flow-intro h1 {
   margin: 0 0 0.5rem;
   font-size: clamp(1.8rem, 3vw, 2.4rem);
   color: var(--color-primary);
