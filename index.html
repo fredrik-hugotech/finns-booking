@@ -1,23 +1,24 @@
 <!DOCTYPE html>
-<!--
-  This is a simple, static booking site for Sparebanken Norge Arena.
-  It is designed to mimic the visual style of Finns.Fairway using
-  similar colours and the official logo.  The page pulls in the
-  Supabase client from a CDN and uses client‑side JavaScript to
-  display available times, block pre‑booked slots and save new
-  bookings.  To connect the page to your Supabase project you must
-  edit the `SUPABASE_URL` and `SUPABASE_ANON_KEY` constants in
-  script.js.  There is no authentication; anyone can view and
-  create bookings.
--->
 <html lang="no">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Finns.Fairway – Sparebanken Norge Arena Booking</title>
-    <!-- Import the Supabase client library (UMD build). -->
+    <link
+      rel="preconnect"
+      href="https://fonts.googleapis.com"
+    />
+    <link
+      rel="preconnect"
+      href="https://fonts.gstatic.com"
+      crossorigin
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <script src="https://unpkg.com/@supabase/supabase-js/umd/supabase.js"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <header class="site-header">
@@ -28,69 +29,189 @@
       </div>
     </header>
     <main>
-      <!-- New calendar and booking sections -->
-      <section id="calendarSection">
-        <h2>Velg dato og tidspunkt</h2>
-        <div class="month-nav">
-          <button id="prevMonth" type="button" aria-label="Forrige måned">&laquo;</button>
-          <span id="monthLabel"></span>
-          <button id="nextMonth" type="button" aria-label="Neste måned">&raquo;</button>
+      <section class="booking-flow">
+        <div class="flow-intro">
+          <h2>Reserver Sparebanken Norge Arena</h2>
+          <p>
+            Velg ønsket tidspunkt i kalenderen, legg til detaljer og bekreft bestillingen.
+            Løsningen bruker Finns.Fairway sine farger og er optimalisert for både mobil og desktop.
+          </p>
         </div>
-        <div id="monthCalendar" class="month-calendar"></div>
-        <div id="timesList" class="times-list"></div>
-      </section>
-      <section id="summarySection">
-        <h2>Din bestilling</h2>
-        <div id="selectedSlots" class="selected-slots"></div>
-        <form class="booking-form" id="customerForm" onsubmit="return false;">
-          <label for="name">Navn:</label>
-          <input type="text" id="name" placeholder="Fullt navn" />
-          <label for="phone">Telefonnummer:</label>
-          <input type="tel" id="phone" placeholder="Telefonnummer" />
-          <label for="email">E‑post:</label>
-          <input type="email" id="email" placeholder="E‑postadresse" />
-          <label for="club">Klubb:</label>
-          <input type="text" id="club" placeholder="Klubb" />
-          <label for="gender">Kjønn:</label>
-          <select id="gender">
-            <option value="" disabled selected>Velg kjønn</option>
-            <option value="mann">Mann</option>
-            <option value="kvinne">Kvinne</option>
-            <option value="annet">Annet</option>
-          </select>
-          <label for="age">Alder:</label>
-          <input type="number" id="age" placeholder="Alder" min="0" />
-          <button type="button" id="submitBooking">Send bestilling</button>
-          <div id="summaryMessage" class="message"></div>
-        </form>
-        <div id="paymentInfo" class="payment-info">
-          <h3>Betaling via Vipps</h3>
-          <img src="ff-qr-kode-vipps.678504736bdb43.83557485.png" alt="Vipps QR kode" class="vipps-qr" />
-          <p>Finns.Fairway vil gjennomgå bestillingen din for endelig godkjenning og bekreftelse. Bestillingen anses som bindende når betaling er mottatt.</p>
+        <div class="flow-progress" aria-label="Fremdrift">
+          <ol class="progress-steps">
+            <li class="progress-step active" data-step="1">
+              <span class="step-index">1</span>
+              <span class="step-label">Tidspunkt</span>
+            </li>
+            <li class="progress-step" data-step="2">
+              <span class="step-index">2</span>
+              <span class="step-label">Kontaktinfo</span>
+            </li>
+            <li class="progress-step" data-step="3">
+              <span class="step-index">3</span>
+              <span class="step-label">Betaling &amp; regler</span>
+            </li>
+          </ol>
         </div>
-      </section>
-
-      <!-- Guidelines section for users -->
-      <section id="guidelines">
-        <div style="font-family: Helvetica, sans-serif; background-color: #f4f4f4; color: #333; padding: 20px; border-radius: 8px; border: 2px solid #006747; width: 100%; max-width: 800px; margin: 20px auto;">
-          <p style="font-size: 16px; color: #006747; font-weight: bold; margin-bottom: 20px; text-align: center;">Retningslinjer for&nbsp;bruk av Sparebanken Sør Arena</p>
-          <p style="font-size: 14px; margin-bottom: 20px;">For &aring; sikre trygg, rettferdig og god bruk av Sparebanken Sør Arena, gjelder f&oslash;lgende retningslinjer. Disse retningslinjene er i tr&aring;d med Norges Fotballforbunds (NFF) og Norges Idrettsforbunds (NIF) retningslinjer, som alle brukere plikter &aring; f&oslash;lge.</p>
-          <h3 style="font-size: 16px; color: #006747; margin-bottom: 10px;">Generelle Regler</h3>
-          <p style="font-size: 14px; margin-bottom: 10px;"><strong>Sikkerhet f&oslash;rst:</strong><br /> Alle aktiviteter p&aring; banen skal utf&oslash;res med hensyn til sikkerhet for spillere, dommere, trenere og publikum.<br /> Banen skal v&aelig;re ryddig og fri for farlige gjenstander f&oslash;r og etter bruk.</p>
-          <p style="font-size: 14px; margin-bottom: 10px;"><strong>Bruk av banen:</strong><br /> Banen skal kun brukes til organiserte treninger, kamper og arrangementer godkjent av ansvarlige instanser.<br /> Privat bruk uten tillatelse er ikke tillatt.<br /> Trenings&oslash;kter og kamper skal avsluttes til oppsatt tid for &aring; sikre rettferdig fordeling av baneareal.</p>
-          <p style="font-size: 14px; margin-bottom: 10px;"><strong>Alders- og ferdighetsniv&aring;:</strong><br /> Det skal tas hensyn til spilleres alder og ferdighetsniv&aring; n&aring;r banen brukes, slik at aktiviteter tilpasses brukernes behov og ferdigheter.</p>
-          <h3 style="font-size: 16px; color: #006747; margin-bottom: 10px;">Spesifikke Forpliktelser</h3>
-          <p style="font-size: 14px; margin-bottom: 10px;"><strong>Retningslinjer fra NFF og NIF:</strong><br /> Alle brukere plikter &aring; f&oslash;lge NFFs regler for spill og NIFs etiske retningslinjer, inkludert retningslinjer mot diskriminering, mobbing og usportslig oppf&oslash;rsel.<br /> Det skal alltid tas hensyn til fair play-prinsippene.</p>
-          <p style="font-size: 14px; margin-bottom: 10px;"><strong>Bruk av utstyr:</strong><br /> Kun godkjent fotballutstyr er tillatt p&aring; banen.<br /> Alt utstyr skal ryddes tilbake p&aring; plass etter bruk.</p>
-          <h3 style="font-size: 16px; color: #006747; margin-bottom: 10px;">Vedlikehold&nbsp;</h3>
-          <p style="font-size: 14px; margin-bottom: 10px;"><strong>Vedlikehold av banen:</strong><br /> Alle brukere plikter &aring; rapportere skader eller mangler p&aring; banen.<br /> S&oslash;ppel og annet avfall skal kastes i oppsatte s&oslash;ppelkasser.</p>
-          <h3 style="font-size: 16px; color: #006747; margin-bottom: 10px;">Konsekvenser ved Brudd</h3>
-          <p style="font-size: 14px; margin-bottom: 10px;">Ved brudd p&aring; retningslinjene kan ansvarlig person, lag eller gruppe miste retten til &aring; bruke banen.<br /> Alvorlige brudd rapporteres til klubbens ledelse eller relevante myndigheter.</p>
-          <h3 style="font-size: 16px; color: #006747; margin-bottom: 10px;">Ansvarlig Bruk</h3>
-          <p style="font-size: 14px; margin-bottom: 20px;">Alle brukere oppfordres til &aring; bruke banen p&aring; en m&aring;te som fremmer idrettsglede, respekt og samhold, i tr&aring;d med idrettens verdier og retningslinjer fra NFF og NIF.</p>
-          <p style="font-size: 14px; text-align: center; color: #006747; font-weight: bold;"> </p>
-          <p style="font-size: 14px; text-align: center; color: #006747; font-weight: bold;"> <img src="https://www.jotform.com/uploads/Jacobsen_Fredrik/form_files/FF_Logo_Grønn.67855c22646325.02055779.png" alt="" width="289" height="93" /></p>
-          <p style="font-size: 14px; text-align: center; color: #006747; font-weight: bold;">For en trygg og aktiv oppvekst</p>
+        <div class="flow-step active" data-step="1">
+          <div class="step-grid">
+            <div class="card calendar-card">
+              <div class="calendar-header">
+                <h3>Velg dato og tidspunkt</h3>
+                <div class="calendar-toolbar">
+                  <div class="month-nav">
+                    <button id="prevMonth" type="button" aria-label="Forrige måned">&laquo;</button>
+                    <span id="monthLabel" class="month-label"></span>
+                    <button id="nextMonth" type="button" aria-label="Neste måned">&raquo;</button>
+                  </div>
+                  <div class="view-toggle" role="tablist" aria-label="Visning av tider">
+                    <button type="button" id="dayViewToggle" class="toggle-button active" data-view="day" aria-selected="true" aria-controls="dayView">Dag</button>
+                    <button type="button" id="weekViewToggle" class="toggle-button" data-view="week" aria-selected="false" aria-controls="weekView">Uke</button>
+                  </div>
+                </div>
+              </div>
+              <div class="calendar-wrapper">
+                <div class="calendar-weekdays" aria-hidden="true">
+                  <span>Man</span>
+                  <span>Tir</span>
+                  <span>Ons</span>
+                  <span>Tor</span>
+                  <span>Fre</span>
+                  <span>Lør</span>
+                  <span>Søn</span>
+                </div>
+                <div id="monthCalendar" class="month-calendar"></div>
+              </div>
+              <div class="availability-legend" aria-hidden="true">
+                <span class="legend-item">
+                  <span class="legend-dot available"></span>
+                  Ledig
+                </span>
+                <span class="legend-item">
+                  <span class="legend-dot partial"></span>
+                  Halv bane ledig
+                </span>
+                <span class="legend-item">
+                  <span class="legend-dot full"></span>
+                  Fullbooket
+                </span>
+              </div>
+              <div class="schedule-panels">
+                <div id="dayView" class="schedule-panel active" role="tabpanel" aria-labelledby="dayViewToggle">
+                  <div class="panel-heading">
+                    <h4 id="dayLabel">Dagens tider</h4>
+                  </div>
+                  <div id="timesList" class="times-list"></div>
+                </div>
+                <div id="weekView" class="schedule-panel" role="tabpanel" aria-labelledby="weekViewToggle"></div>
+              </div>
+            </div>
+            <div class="card summary-card">
+              <div class="summary-header">
+                <h3>Din bestilling</h3>
+                <p>Legg til tidspunkt fra kalenderen for å se oppsummering og totalpris.</p>
+              </div>
+              <div id="selectedSlots" class="selected-slots"></div>
+              <div class="step-actions">
+                <button id="step1Next" type="button" class="primary-action" disabled>Videre</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flow-step" data-step="2">
+          <div class="card form-card">
+            <h3>Kontaktinformasjon</h3>
+            <p>Vi trenger kontaktinformasjon for å bekrefte reservasjonen.</p>
+            <form id="customerForm" novalidate>
+              <div class="form-grid">
+                <div class="form-field">
+                  <label for="name">Navn</label>
+                  <input type="text" id="name" autocomplete="name" placeholder="Fullt navn" required />
+                </div>
+                <div class="form-field">
+                  <label for="phone">Telefonnummer</label>
+                  <input type="tel" id="phone" autocomplete="tel" placeholder="Telefonnummer" required />
+                </div>
+                <div class="form-field">
+                  <label for="email">E-post</label>
+                  <input type="email" id="email" autocomplete="email" placeholder="E-postadresse" required />
+                </div>
+                <div class="form-field">
+                  <label for="club">Klubb</label>
+                  <input type="text" id="club" placeholder="Klubb" required />
+                </div>
+                <div class="form-field">
+                  <label for="gender">Kjønn</label>
+                  <select id="gender" required>
+                    <option value="" disabled selected>Velg kjønn</option>
+                    <option value="mann">Mann</option>
+                    <option value="kvinne">Kvinne</option>
+                    <option value="annet">Annet</option>
+                  </select>
+                </div>
+                <div class="form-field">
+                  <label for="age">Alder</label>
+                  <input type="number" id="age" min="0" placeholder="Alder" required />
+                </div>
+              </div>
+            </form>
+          </div>
+          <div class="step-actions">
+            <button id="step2Back" type="button" class="secondary-action">Tilbake</button>
+            <button id="step2Next" type="button" class="primary-action" disabled>Videre</button>
+          </div>
+        </div>
+        <div class="flow-step" data-step="3">
+          <div class="card payment-card">
+            <h3>Betaling</h3>
+            <p>Vipps beløpet for reservasjonen for å bekrefte bestillingen.</p>
+            <div class="payment-content">
+              <div class="payment-details">
+                <p><strong>Vipps:</strong> Finns.Fairway</p>
+                <p><strong>Beløp:</strong> Oppgitt i oppsummeringen</p>
+                <p><strong>Merk betalingen med:</strong> Navn og dato for reservasjonen</p>
+              </div>
+              <img
+                src="ff-qr-kode-vipps.678504736bdb43.83557485.png"
+                alt="Vipps QR kode"
+                class="vipps-qr"
+              />
+            </div>
+          </div>
+          <section class="card guidelines-card">
+            <h3>Retningslinjer for bruk av Sparebanken Norge Arena</h3>
+            <p>
+              For å sikre trygg, rettferdig og god bruk av Sparebanken Norge Arena gjelder følgende retningslinjer.
+              Disse er i tråd med Norges Fotballforbund (NFF) og Norges Idrettsforbund (NIF).
+            </p>
+            <h4>Generelle regler</h4>
+            <ul>
+              <li><strong>Sikkerhet først:</strong> Aktivitet på banen skal ivareta sikkerhet for spillere, dommere, trenere og publikum.</li>
+              <li>Banen skal være ryddig og fri for farlige gjenstander før og etter bruk.</li>
+              <li><strong>Bruk av banen:</strong> Kun organiserte treninger, kamper og godkjente arrangementer er tillatt.</li>
+              <li>Privat bruk uten tillatelse er ikke tillatt og alle økter skal avsluttes til oppsatt tid.</li>
+              <li><strong>Alders- og ferdighetsnivå:</strong> Aktivitetene skal tilpasses deltakernes nivå.</li>
+            </ul>
+            <h4>Spesifikke forpliktelser</h4>
+            <ul>
+              <li>Følg alltid NFFs regler og NIFs etiske retningslinjer, inkludert retningslinjer mot diskriminering og mobbing.</li>
+              <li>Fair play-prinsippet skal ligge til grunn for all aktivitet.</li>
+              <li><strong>Bruk av utstyr:</strong> Kun godkjent fotballutstyr er tillatt og alt utstyr skal ryddes på plass etter bruk.</li>
+            </ul>
+            <h4>Vedlikehold og ansvar</h4>
+            <ul>
+              <li>Rapporter skader eller mangler på banen.</li>
+              <li>Søppel skal kastes i oppsatte søppelkasser.</li>
+              <li>Brudd på retningslinjene kan føre til tap av bruksrett eller videre rapportering.</li>
+              <li>Bruk banen på en måte som fremmer idrettsglede, respekt og samhold.</li>
+            </ul>
+            <p class="guidelines-footer">For en trygg og aktiv oppvekst</p>
+          </section>
+          <div class="step-actions">
+            <button id="step3Back" type="button" class="secondary-action">Tilbake</button>
+            <button id="completeBooking" type="button" class="primary-action">Fullfør bestilling</button>
+          </div>
+          <div id="summaryMessage" class="message" role="status" aria-live="polite"></div>
         </div>
       </section>
     </main>
