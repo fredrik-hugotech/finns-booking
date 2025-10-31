@@ -7,8 +7,10 @@
 // TODO: Sett inn egne Supabase-nøkler før produksjon.
 const SUPABASE_URL = 'YOUR_SUPABASE_URL';
 const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_SERVICE_ROLE_KEY = 'YOUR_SUPABASE_SERVICE_ROLE_KEY';
 const SUPABASE_PLACEHOLDER_URL = 'YOUR_SUPABASE_URL';
-const SUPABASE_PLACEHOLDER_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_PLACEHOLDER_ANON = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_PLACEHOLDER_SERVICE_ROLE = 'YOUR_SUPABASE_SERVICE_ROLE_KEY';
 
 function normaliseConfigValue(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -18,8 +20,12 @@ function resolveSupabaseConfig() {
   const candidates = [];
 
   if (typeof window !== 'undefined') {
-    if (window.SUPABASE_URL || window.SUPABASE_ANON_KEY) {
-      candidates.push({ url: window.SUPABASE_URL, key: window.SUPABASE_ANON_KEY });
+    if (window.SUPABASE_URL || window.SUPABASE_ANON_KEY || window.SUPABASE_SERVICE_ROLE_KEY) {
+      candidates.push({
+        url: window.SUPABASE_URL,
+        key: window.SUPABASE_ANON_KEY || window.SUPABASE_SERVICE_ROLE_KEY,
+        type: window.SUPABASE_SERVICE_ROLE_KEY ? 'service_role' : 'anon',
+      });
     }
 
     if (window.__SUPABASE_CONFIG) {
@@ -28,8 +34,13 @@ function resolveSupabaseConfig() {
 
     const metaUrl = document.querySelector('meta[name="supabase-url"]');
     const metaKey = document.querySelector('meta[name="supabase-anon-key"]');
-    if (metaUrl || metaKey) {
-      candidates.push({ url: metaUrl?.content, key: metaKey?.content });
+    const metaServiceRole = document.querySelector('meta[name="supabase-service-role-key"]');
+    if (metaUrl || metaKey || metaServiceRole) {
+      candidates.push({
+        url: metaUrl?.content,
+        key: metaKey?.content || metaServiceRole?.content,
+        type: metaServiceRole?.content ? 'service_role' : 'anon',
+      });
     }
 
     const configScript = document.getElementById('supabase-config');
@@ -43,23 +54,40 @@ function resolveSupabaseConfig() {
     }
 
     const htmlDataset = document.documentElement?.dataset;
-    if (htmlDataset && (htmlDataset.supabaseUrl || htmlDataset.supabaseAnonKey)) {
-      candidates.push({ url: htmlDataset.supabaseUrl, key: htmlDataset.supabaseAnonKey });
+    if (
+      htmlDataset &&
+      (htmlDataset.supabaseUrl || htmlDataset.supabaseAnonKey || htmlDataset.supabaseServiceRoleKey)
+    ) {
+      candidates.push({
+        url: htmlDataset.supabaseUrl,
+        key: htmlDataset.supabaseAnonKey || htmlDataset.supabaseServiceRoleKey,
+        type: htmlDataset.supabaseServiceRoleKey ? 'service_role' : 'anon',
+      });
     }
   }
 
-  candidates.push({ url: SUPABASE_URL, key: SUPABASE_ANON_KEY });
+  candidates.push({ url: SUPABASE_URL, key: SUPABASE_ANON_KEY, type: 'anon' });
+  candidates.push({ url: SUPABASE_URL, key: SUPABASE_SERVICE_ROLE_KEY, type: 'service_role' });
 
   for (const candidate of candidates) {
-    const url = normaliseConfigValue(candidate?.url);
-    const key = normaliseConfigValue(candidate?.key);
-    if (
-      url &&
-      key &&
-      url !== SUPABASE_PLACEHOLDER_URL &&
-      key !== SUPABASE_PLACEHOLDER_KEY
-    ) {
-      return { url, key };
+    const url = normaliseConfigValue(
+      candidate?.url ?? candidate?.SUPABASE_URL ?? candidate?.supabaseUrl,
+    );
+    const rawServiceRole =
+      candidate?.serviceRoleKey ?? candidate?.SUPABASE_SERVICE_ROLE_KEY ?? candidate?.supabaseServiceRoleKey;
+    const rawAnon =
+      candidate?.anonKey ?? candidate?.SUPABASE_ANON_KEY ?? candidate?.supabaseAnonKey;
+    const key = normaliseConfigValue(
+      candidate?.key ?? (candidate?.type === 'service_role' ? rawServiceRole : rawAnon) ?? rawAnon ?? rawServiceRole,
+    );
+    const type = key === normaliseConfigValue(rawServiceRole) || candidate?.type === 'service_role'
+      ? 'service_role'
+      : 'anon';
+    const isPlaceholder =
+      (type === 'anon' && key === SUPABASE_PLACEHOLDER_ANON) ||
+      (type === 'service_role' && key === SUPABASE_PLACEHOLDER_SERVICE_ROLE);
+    if (url && key && url !== SUPABASE_PLACEHOLDER_URL && !isPlaceholder) {
+      return { url, key, type };
     }
   }
 
@@ -68,13 +96,26 @@ function resolveSupabaseConfig() {
 
 const resolvedSupabaseConfig = resolveSupabaseConfig();
 const supabaseClient = resolvedSupabaseConfig
-  ? supabase.createClient(resolvedSupabaseConfig.url, resolvedSupabaseConfig.key)
+  ? supabase.createClient(resolvedSupabaseConfig.url, resolvedSupabaseConfig.key, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    })
   : null;
 
 if (!supabaseClient) {
   console.warn(
-    'Supabase er ikke konfigurert. Legg inn URL og anon key i script.js, via '
-      + 'window.SUPABASE_URL/SUPABASE_ANON_KEY, data-attributter på <html> eller <meta> tagger.',
+    'Supabase er ikke konfigurert. Legg inn URL og nøkkel i script.js, via '
+      + 'window.SUPABASE_URL/SUPABASE_ANON_KEY eller SUPABASE_SERVICE_ROLE_KEY, '
+      + 'data-attributter på <html> eller <meta> tagger.',
+  );
+}
+
+if (resolvedSupabaseConfig?.type === 'service_role') {
+  console.warn(
+    'Supabase bruker service role key. Bekreft at denne leveres sikkert fra backend og ikke eksponeres offentlig.',
   );
 }
 
