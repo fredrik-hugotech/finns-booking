@@ -20,6 +20,12 @@ function resolveSupabaseConfig() {
   const candidates = [];
 
   if (typeof window !== 'undefined') {
+    const globalCandidate =
+      window.supabaseConfig || window.__supabaseConfig || window.SUPABASE_CONFIG;
+    if (globalCandidate) {
+      candidates.push(globalCandidate);
+    }
+
     if (window.SUPABASE_URL || window.SUPABASE_ANON_KEY || window.SUPABASE_SERVICE_ROLE_KEY) {
       candidates.push({
         url: window.SUPABASE_URL,
@@ -30,6 +36,22 @@ function resolveSupabaseConfig() {
 
     if (window.__SUPABASE_CONFIG) {
       candidates.push(window.__SUPABASE_CONFIG);
+    }
+
+    const envBuckets = [
+      window.__ENV,
+      window._env_,
+      window.env,
+      window.ENV,
+      window.__env__,
+      window.runtimeConfig,
+      window.config,
+      window.__CONFIG__,
+    ];
+    for (const bucket of envBuckets) {
+      if (bucket) {
+        candidates.push(bucket);
+      }
     }
 
     const metaUrl = document.querySelector('meta[name="supabase-url"]');
@@ -63,6 +85,34 @@ function resolveSupabaseConfig() {
         key: htmlDataset.supabaseAnonKey || htmlDataset.supabaseServiceRoleKey,
         type: htmlDataset.supabaseServiceRoleKey ? 'service_role' : 'anon',
       });
+    }
+
+    const bodyDataset = document.body?.dataset;
+    if (bodyDataset && (bodyDataset.supabaseUrl || bodyDataset.supabaseAnonKey || bodyDataset.supabaseServiceRoleKey)) {
+      candidates.push({
+        url: bodyDataset.supabaseUrl,
+        key: bodyDataset.supabaseAnonKey || bodyDataset.supabaseServiceRoleKey,
+        type: bodyDataset.supabaseServiceRoleKey ? 'service_role' : 'anon',
+      });
+    }
+  }
+
+  if (typeof globalThis !== 'undefined') {
+    if (globalThis.process?.env) {
+      candidates.push(globalThis.process.env);
+    }
+
+    const globalEnv =
+      globalThis.__ENV ||
+      globalThis._env_ ||
+      globalThis.env ||
+      globalThis.ENV ||
+      globalThis.__env__ ||
+      globalThis.runtimeConfig ||
+      globalThis.config ||
+      globalThis.__CONFIG__;
+    if (globalEnv) {
+      candidates.push(globalEnv);
     }
   }
 
@@ -109,7 +159,8 @@ if (!supabaseClient) {
   console.warn(
     'Supabase er ikke konfigurert. Legg inn URL og nøkkel i script.js, via '
       + 'window.SUPABASE_URL/SUPABASE_ANON_KEY eller SUPABASE_SERVICE_ROLE_KEY, '
-      + 'data-attributter på <html> eller <meta> tagger.',
+      + 'data-attributter på <html> eller <meta> tagger, eller '
+      + 'gjør nøklene tilgjengelig i window.__ENV/_env_/ENV eller process.env.',
   );
 }
 
@@ -679,7 +730,9 @@ async function submitBooking() {
   if (!supabaseClient) {
     displaySummaryMessage(
       'error',
-      'Kan ikke fullføre bestillingen fordi Supabase-nøkler mangler. Sett inn gyldig URL og anon key.',
+      'Kan ikke fullføre bestillingen fordi Supabase-nøkler mangler. Legg inn URL og nøkkel i <meta> taggene, '
+        + 'som data-attributter på <html>/<body> eller gjør dem tilgjengelig via window.SUPABASE_URL/SUPABASE_ANON_KEY '
+        + 'eller window.__ENV/_env_/ENV.',
     );
     return;
   }
