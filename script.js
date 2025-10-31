@@ -8,8 +8,8 @@
  */
 
 // TODO: replace these constants with your own project credentials.
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_URL = 'https://bpbqcqqlqrdruxbottdn.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwYnFjcXFscXJkcnV4Ym90dGRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE5MDAzNTAsImV4cCI6MjA3NzQ3NjM1MH0.kxHA7ta7ld95-PDhVEDvkgxJ-BhHjI0Zn2fwWv7LFNc';
 
 // Initialise Supabase client if credentials are supplied.  If left
 // blank, the booking page will still render but bookings will not
