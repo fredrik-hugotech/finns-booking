@@ -28,34 +28,29 @@
       </div>
     </header>
     <main>
-      <section id="booking">
-        <h2>Book Sparebanken Norge Arena</h2>
-        <form class="booking-form" id="bookingForm" onsubmit="return false;">
-          <label for="date">Dato:</label>
-          <input type="date" id="date" required />
-
-          <label for="time">Tidspunkt:</label>
-          <select id="time"></select>
-
-          <label for="lane">Banetype:</label>
-          <select id="lane">
-            <option value="full">Full bane</option>
-            <option value="half">Halv bane</option>
-          </select>
-
+      <!-- New calendar and booking sections -->
+      <section id="calendarSection">
+        <h2>Velg dato og tidspunkt</h2>
+        <div class="month-nav">
+          <button id="prevMonth" type="button" aria-label="Forrige måned">&laquo;</button>
+          <span id="monthLabel"></span>
+          <button id="nextMonth" type="button" aria-label="Neste måned">&raquo;</button>
+        </div>
+        <div id="monthCalendar" class="month-calendar"></div>
+        <div id="timesList" class="times-list"></div>
+      </section>
+      <section id="summarySection">
+        <h2>Din bestilling</h2>
+        <div id="selectedSlots" class="selected-slots"></div>
+        <form class="booking-form" id="customerForm" onsubmit="return false;">
           <label for="name">Navn:</label>
           <input type="text" id="name" placeholder="Fullt navn" />
-
-          <!-- Additional contact fields -->
           <label for="phone">Telefonnummer:</label>
           <input type="tel" id="phone" placeholder="Telefonnummer" />
-
           <label for="email">E‑post:</label>
           <input type="email" id="email" placeholder="E‑postadresse" />
-
           <label for="club">Klubb:</label>
           <input type="text" id="club" placeholder="Klubb" />
-
           <label for="gender">Kjønn:</label>
           <select id="gender">
             <option value="" disabled selected>Velg kjønn</option>
@@ -63,17 +58,16 @@
             <option value="kvinne">Kvinne</option>
             <option value="annet">Annet</option>
           </select>
-
           <label for="age">Alder:</label>
           <input type="number" id="age" placeholder="Alder" min="0" />
-
-          <button type="submit" id="bookButton">Book</button>
-          <div id="message" class="message"></div>
+          <button type="button" id="submitBooking">Send bestilling</button>
+          <div id="summaryMessage" class="message"></div>
         </form>
-      </section>
-      <section id="calendar">
-        <h2>Tilgjengelige tider</h2>
-        <div id="calendarGrid" class="calendar-grid"></div>
+        <div id="paymentInfo" class="payment-info">
+          <h3>Betaling via Vipps</h3>
+          <img src="ff-qr-kode-vipps.678504736bdb43.83557485.png" alt="Vipps QR kode" class="vipps-qr" />
+          <p>Finns.Fairway vil gjennomgå bestillingen din for endelig godkjenning og bekreftelse. Bestillingen anses som bindende når betaling er mottatt.</p>
+        </div>
       </section>
 
       <!-- Guidelines section for users -->

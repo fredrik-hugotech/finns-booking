@@ -123,36 +123,141 @@ h2 {
   color: #a40000;
 }
 
-/* Calendar grid */
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: var(--spacing);
+/* Month navigation */
+.month-nav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: var(--spacing);
 }
-
-.calendar-slot {
+.month-nav button {
+  background-color: var(--color-primary);
+  color: var(--color-light);
+  border: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.month-nav button:hover {
+  background-color: #00473d;
+}
+.month-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+  margin-bottom: var(--spacing);
+}
+.day-cell {
   padding: 0.75rem;
   text-align: center;
   border: 1px solid var(--color-primary);
   border-radius: var(--radius);
-  background-color: var(--color-light);
-  cursor: default;
+  cursor: pointer;
 }
-
-.calendar-slot.unavailable {
-  background-color: #e0e0e0;
-  color: #777;
+.day-cell.full-day {
+  background-color: #f8d7da; /* light red */
+  color: #721c24;
+  cursor: not-allowed;
+}
+.day-cell.half-day {
+  background-color: #fff3cd; /* light yellow */
+  color: #856404;
+}
+.day-cell.available-day {
+  background-color: #d4edda; /* light green */
+  color: #155724;
+}
+.day-cell.selected-day {
+  border: 2px solid var(--color-primary);
+}
+.day-cell.empty {
+  background: transparent;
+  border: none;
   pointer-events: none;
 }
 
-.calendar-slot.available {
-  background-color: var(--color-accent);
+/* Times list */
+.times-list {
+  margin-top: var(--spacing);
+}
+.time-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.time-row span {
+  flex: 1;
+}
+.time-button {
+  padding: 0.25rem 0.5rem;
+  margin-left: 0.25rem;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius);
   cursor: pointer;
+  font-size: 0.9rem;
+  background-color: var(--color-accent);
+  color: var(--color-text);
   transition: background-color 0.2s ease;
 }
+.time-button.full {
+  background-color: var(--color-primary);
+  color: var(--color-light);
+}
+.time-button:disabled {
+  background-color: #e0e0e0;
+  color: #777;
+  cursor: not-allowed;
+}
+.time-button:hover:not(:disabled) {
+  filter: brightness(0.9);
+}
 
-.calendar-slot.available:hover {
-  background-color: #ffe680;
+/* Selected slots summary */
+.selected-slots ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.selected-slots li {
+  margin-bottom: 0.5rem;
+}
+.remove-button {
+  margin-left: 0.5rem;
+  background-color: #a40000;
+  color: var(--color-light);
+  border: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.remove-button:hover {
+  background-color: #820000;
+}
+.total-price {
+  font-weight: bold;
+  margin-top: 0.5rem;
+}
+
+/* Payment section */
+.payment-info {
+  margin-top: var(--spacing);
+  background-color: var(--color-light);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius);
+  padding: var(--spacing);
+}
+.payment-info h3 {
+  margin-top: 0;
+  color: var(--color-primary);
+}
+.vipps-qr {
+  width: 180px;
+  height: auto;
+  display: block;
+  margin: 0.5rem auto;
 }
 
 footer {

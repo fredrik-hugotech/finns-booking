@@ -12,12 +12,12 @@ const SUPABASE_URL = 'YOUR_SUPABASE_URL';
 const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 
 // Initialise Supabase client if credentials are supplied.  If left
-// blank, the booking form will still render but bookings will not
+// blank, the booking page will still render but bookings will not
 // persist across sessions.
-let supabase = null;
-if (SUPABASE_URL && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-  supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
+const supabaseClient =
+  SUPABASE_URL && SUPABASE_URL !== 'YOUR_SUPABASE_URL'
+    ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    : null;
 
 // Define the standard time slots (24‑hour format) you wish to offer.
 const availableTimes = [
@@ -31,177 +31,377 @@ const preBookedTimes = [
   // Example: { date: '2025-11-01', time: '16:00', lane: 'full' },
 ];
 
-// Store fetched bookings for the currently selected date.
-let bookings = [];
+// Booking application state
+const priceFull = 1990;
+const priceHalf = 1490;
+let selectedSlots = []; // { date, time, lane }
+let monthBookings = []; // bookings loaded for the current month
+let currentYear = new Date().getFullYear();
+let currentMonth = new Date().getMonth();
 
-// DOM elements
-const dateInput = document.getElementById('date');
-const timeSelect = document.getElementById('time');
-const laneSelect = document.getElementById('lane');
+// DOM elements for the new UI
+const monthLabel = document.getElementById('monthLabel');
+const monthCalendar = document.getElementById('monthCalendar');
+const timesList = document.getElementById('timesList');
+const selectedSlotsContainer = document.getElementById('selectedSlots');
+const prevMonthBtn = document.getElementById('prevMonth');
+const nextMonthBtn = document.getElementById('nextMonth');
+
 const nameInput = document.getElementById('name');
-const contactInput = document.getElementById('contact');
-// Additional form elements for extended booking details
 const phoneInput = document.getElementById('phone');
 const emailInput = document.getElementById('email');
 const clubInput = document.getElementById('club');
 const genderSelect = document.getElementById('gender');
 const ageInput = document.getElementById('age');
-const bookButton = document.getElementById('bookButton');
-const messageBox = document.getElementById('message');
-const calendarGrid = document.getElementById('calendarGrid');
-const yearSpan = document.getElementById('year');
+const submitBookingBtn = document.getElementById('submitBooking');
+const summaryMessageBox = document.getElementById('summaryMessage');
 
-// Set current year in footer
-yearSpan.textContent = new Date().getFullYear();
-
-// Populate the date input with today's date as default
-const today = new Date().toISOString().split('T')[0];
-dateInput.value = today;
-
-// Hook up event listeners
-dateInput.addEventListener('change', handleDateOrLaneChange);
-laneSelect.addEventListener('change', handleDateOrLaneChange);
-bookButton.addEventListener('click', handleBooking);
-
-// Initial render
-loadBookings(dateInput.value).then(() => {
-  renderCalendar();
-});
-
-// Fetch bookings for a specific date from Supabase.  If the client
-// is not initialised, resolves with an empty array.
-async function loadBookings(date) {
-  if (!supabase) {
-    bookings = [];
+/**
+ * Load all bookings for the given month (inclusive).
+ * If Supabase is not configured, no bookings will be loaded.
+ */
+async function loadMonthBookings(year, month) {
+  if (!supabaseClient) {
+    monthBookings = [];
     return;
   }
-  const { data, error } = await supabase
+  const startDate = new Date(year, month, 1);
+  const endDate = new Date(year, month + 1, 0);
+  const startStr = startDate.toISOString().split('T')[0];
+  const endStr = endDate.toISOString().split('T')[0];
+  const { data, error } = await supabaseClient
     .from('bookings')
     .select('*')
-    .eq('date', date);
+    .gte('date', startStr)
+    .lte('date', endStr);
   if (error) {
-    console.error('Error loading bookings:', error);
-    bookings = [];
+    console.error('Error loading month bookings:', error);
+    monthBookings = [];
   } else {
-    bookings = data || [];
+    monthBookings = data || [];
   }
 }
 
-// When the date or lane changes we need to fetch new bookings and
-// update the UI.
-async function handleDateOrLaneChange() {
-  const selectedDate = dateInput.value;
-  await loadBookings(selectedDate);
-  renderCalendar();
-}
-
-// Render the calendar grid based on the selected date and lane.
-function renderCalendar() {
-  const selectedDate = dateInput.value;
-  const selectedLane = laneSelect.value;
-  // Clear current grid and time options
-  calendarGrid.innerHTML = '';
-  timeSelect.innerHTML = '';
-
-  availableTimes.forEach((time) => {
-    const slot = document.createElement('div');
-    slot.textContent = time;
-    slot.classList.add('calendar-slot');
-    // Determine if slot is unavailable because of a pre-booking or existing booking
-    const isPreBooked = preBookedTimes.some(
-      (b) => b.date === selectedDate && b.time === time && (b.lane === selectedLane || b.lane === 'full' || selectedLane === 'full')
-    );
-    const isBooked = bookings.some(
-      (b) => b.date === selectedDate && b.time === time && (b.lane === selectedLane || b.lane === 'full' || selectedLane === 'full')
-    );
-    const unavailable = isPreBooked || isBooked;
-    if (unavailable) {
-      slot.classList.add('unavailable');
-    } else {
-      slot.classList.add('available');
-      slot.addEventListener('click', () => {
-        timeSelect.value = time;
-      });
-      // Add to time dropdown
-      const opt = document.createElement('option');
-      opt.value = time;
-      opt.textContent = time;
-      timeSelect.appendChild(opt);
+/**
+ * Compute booking status for a given date.
+ * Returns "full" if no half-lane units remain, "half" if over 50% booked,
+ * otherwise "available".
+ */
+function computeDateStatus(dateStr) {
+  const totalUnits = availableTimes.length * 2;
+  let occupiedUnits = 0;
+  // Occupy units from preBookedTimes
+  preBookedTimes.forEach((b) => {
+    if (b.date === dateStr) {
+      occupiedUnits += b.lane === 'full' ? 2 : 1;
     }
-    calendarGrid.appendChild(slot);
   });
+  // Occupy units from month bookings
+  monthBookings.forEach((b) => {
+    if (b.date === dateStr) {
+      occupiedUnits += b.lane === 'full' ? 2 : 1;
+    }
+  });
+  // Occupy units from current selection
+  selectedSlots.forEach((b) => {
+    if (b.date === dateStr) {
+      occupiedUnits += b.lane === 'full' ? 2 : 1;
+    }
+  });
+  if (occupiedUnits >= totalUnits) return 'full';
+  if (occupiedUnits >= totalUnits / 2) return 'half';
+  return 'available';
 }
 
-// Handle new booking submission
-async function handleBooking() {
-  const date = dateInput.value;
-  const time = timeSelect.value;
-  const lane = laneSelect.value;
+/**
+ * Render the month calendar grid.
+ * Each day cell is colour-coded based on occupancy and clickable to load times.
+ */
+function renderMonthCalendar() {
+  monthCalendar.innerHTML = '';
+  const monthNames = [
+    'Januar','Februar','Mars','April','Mai','Juni',
+    'Juli','August','September','Oktober','November','Desember'
+  ];
+  monthLabel.textContent = `${monthNames[currentMonth]} ${currentYear}`;
+  const firstDay = new Date(currentYear, currentMonth, 1);
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  // Determine Monday-based weekday index (0=Monday)
+  const startWeekday = (firstDay.getDay() + 6) % 7;
+  // Fill blank cells for days before the 1st
+  for (let i = 0; i < startWeekday; i++) {
+    const blank = document.createElement('div');
+    blank.className = 'day-cell empty';
+    monthCalendar.appendChild(blank);
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const cell = document.createElement('div');
+    cell.classList.add('day-cell');
+    const status = computeDateStatus(dateStr);
+    if (status === 'full') {
+      cell.classList.add('full-day');
+    } else if (status === 'half') {
+      cell.classList.add('half-day');
+    } else {
+      cell.classList.add('available-day');
+    }
+    if (selectedSlots.some(s => s.date === dateStr)) {
+      cell.classList.add('selected-day');
+    }
+    cell.textContent = day;
+    cell.addEventListener('click', () => {
+      loadTimesForDate(dateStr);
+    });
+    monthCalendar.appendChild(cell);
+  }
+}
+
+/**
+ * Render available time options for a specific date.
+ * For each time, show buttons to select half or full lane, based on availability.
+ */
+function loadTimesForDate(dateStr) {
+  timesList.innerHTML = '';
+  const heading = document.createElement('h3');
+  heading.textContent = `Tilgjengelige tider ${dateStr}`;
+  timesList.appendChild(heading);
+  let any = false;
+  availableTimes.forEach((time) => {
+    // Determine occupied units for this time
+    let occupied = 0;
+    preBookedTimes.forEach((b) => {
+      if (b.date === dateStr && b.time === time) {
+        occupied += b.lane === 'full' ? 2 : 1;
+      }
+    });
+    monthBookings.forEach((b) => {
+      if (b.date === dateStr && b.time === time) {
+        occupied += b.lane === 'full' ? 2 : 1;
+      }
+    });
+    selectedSlots.forEach((b) => {
+      if (b.date === dateStr && b.time === time) {
+        occupied += b.lane === 'full' ? 2 : 1;
+      }
+    });
+    const avail = 2 - occupied;
+    if (avail <= 0) {
+      // Fully booked; do not show options
+      return;
+    }
+    any = true;
+    const row = document.createElement('div');
+    row.classList.add('time-row');
+    const label = document.createElement('span');
+    label.textContent = time;
+    row.appendChild(label);
+    // Half lane button
+    const halfBtn = document.createElement('button');
+    halfBtn.textContent = 'Halv';
+    halfBtn.classList.add('time-button','half');
+    if (avail >= 1) {
+      halfBtn.addEventListener('click', () => {
+        addSlot(dateStr, time, 'half');
+      });
+    } else {
+      halfBtn.disabled = true;
+    }
+    // full lane button
+    const fullBtn = document.createElement('button');
+    fullBtn.textContent = 'Full';
+    fullBtn.classList.add('time-button','full');
+    if (avail >= 2) {
+      fullBtn.addEventListener('click', () => {
+        addSlot(dateStr, time, 'full');
+      });
+    } else {
+      fullBtn.disabled = true;
+    }
+    row.appendChild(halfBtn);
+    row.appendChild(fullBtn);
+    timesList.appendChild(row);
+  });
+  if (!any) {
+    const p = document.createElement('p');
+    p.textContent = 'Ingen ledige tider denne dagen.';
+    timesList.appendChild(p);
+  }
+}
+
+/**
+ * Add a slot to the user's selection.
+ * Updates the summary, calendar and times list.
+ */
+function addSlot(dateStr, time, lane) {
+  // Add slot to selections
+  selectedSlots.push({ date: dateStr, time, lane });
+  updateSummary();
+  renderMonthCalendar();
+  loadTimesForDate(dateStr);
+}
+
+/**
+ * Update the selected slots summary with price calculation.
+ */
+function updateSummary() {
+  selectedSlotsContainer.innerHTML = '';
+  if (selectedSlots.length === 0) {
+    const p = document.createElement('p');
+    p.textContent = 'Ingen tider valgt ennå.';
+    selectedSlotsContainer.appendChild(p);
+    return;
+  }
+  const list = document.createElement('ul');
+  let total = 0;
+  selectedSlots.forEach((slot, index) => {
+    const li = document.createElement('li');
+    const price = slot.lane === 'full' ? priceFull : priceHalf;
+    total += price;
+    li.textContent = `${slot.date} kl ${slot.time} – ${slot.lane === 'full' ? 'Full bane' : 'Halv bane'} (${price} kr) `;
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = 'Fjern';
+    removeBtn.classList.add('remove-button');
+    removeBtn.addEventListener('click', () => {
+      selectedSlots.splice(index, 1);
+      updateSummary();
+      renderMonthCalendar();
+      loadTimesForDate(slot.date);
+    });
+    li.appendChild(removeBtn);
+    list.appendChild(li);
+  });
+  selectedSlotsContainer.appendChild(list);
+  const totalEl = document.createElement('p');
+  totalEl.classList.add('total-price');
+  totalEl.textContent = `Total pris: ${total} kr`;
+  selectedSlotsContainer.appendChild(totalEl);
+}
+
+/**
+ * Finalise the booking: validates input, checks availability, inserts into Supabase.
+ */
+async function submitBooking() {
+  summaryMessageBox.textContent = '';
+  summaryMessageBox.classList.remove('success','error');
+  if (selectedSlots.length === 0) {
+    summaryMessageBox.textContent = 'Du har ikke valgt noen tider.';
+    summaryMessageBox.classList.add('error');
+    return;
+  }
   const name = nameInput.value.trim();
-  // Collect extended booking details from the form
   const phone = phoneInput.value.trim();
   const email = emailInput.value.trim();
   const club = clubInput.value.trim();
   const gender = genderSelect.value;
   const age = ageInput.value.trim();
-  messageBox.textContent = '';
-  messageBox.classList.remove('success', 'error');
-
-  if (!date || !time || !lane) {
-    messageBox.textContent = 'Vennligst velg dato, tid og banetype.';
-    messageBox.classList.add('error');
+  if (!name || !phone || !email || !club || !gender || !age) {
+    summaryMessageBox.textContent = 'Vennligst fyll ut alle personopplysninger.';
+    summaryMessageBox.classList.add('error');
     return;
   }
-  if (!name) {
-    messageBox.textContent = 'Vennligst skriv inn ditt navn.';
-    messageBox.classList.add('error');
+  // Check availability for each selected slot again
+  let unavailable = false;
+  selectedSlots.forEach((slot) => {
+    let occupied = 0;
+    preBookedTimes.forEach((b) => {
+      if (b.date === slot.date && b.time === slot.time) {
+        occupied += b.lane === 'full' ? 2 : 1;
+      }
+    });
+    monthBookings.forEach((b) => {
+      if (b.date === slot.date && b.time === slot.time) {
+        occupied += b.lane === 'full' ? 2 : 1;
+      }
+    });
+    const available = 2 - occupied;
+    const needed = slot.lane === 'full' ? 2 : 1;
+    if (available < needed) {
+      unavailable = true;
+    }
+  });
+  if (unavailable) {
+    summaryMessageBox.textContent = 'En eller flere av de valgte tidene er ikke lenger tilgjengelige.';
+    summaryMessageBox.classList.add('error');
     return;
   }
-  // Require phone, email, club, gender and age to be provided
-  if (!phone || !email || !club || !gender || !age) {
-    messageBox.textContent = 'Vennligst oppgi telefonnummer, e‑post, klubb, kjønn og alder.';
-    messageBox.classList.add('error');
-    return;
+  // Save to Supabase
+  if (supabaseClient) {
+    const insertData = selectedSlots.map((slot) => ({
+      date: slot.date,
+      time: slot.time,
+      lane: slot.lane,
+      name,
+      phone,
+      email,
+      club,
+      gender,
+      age
+    }));
+    const { error } = await supabaseClient.from('bookings').insert(insertData);
+    if (error) {
+      console.error('Error inserting bookings:', error);
+      summaryMessageBox.textContent = 'Det oppstod en feil under lagring av bestillingen.';
+      summaryMessageBox.classList.add('error');
+      return;
+    }
+    // Refresh month bookings so the calendar updates
+    await loadMonthBookings(currentYear, currentMonth);
+  } else {
+    // If Supabase isn't configured, just add to monthBookings in memory
+    selectedSlots.forEach((slot) => {
+      monthBookings.push({ date: slot.date, time: slot.time, lane: slot.lane });
+    });
   }
-
-  // Check again if the slot is still available before booking
-  const conflictPre = preBookedTimes.some((b) => b.date === date && b.time === time && (b.lane === lane || b.lane === 'full' || lane === 'full'));
-  const conflictExisting = bookings.some((b) => b.date === date && b.time === time && (b.lane === lane || b.lane === 'full' || lane === 'full'));
-  if (conflictPre || conflictExisting) {
-    messageBox.textContent = 'Den valgte tiden er dessverre ikke tilgjengelig.';
-    messageBox.classList.add('error');
-    return;
-  }
-
-  if (!supabase) {
-    // If there is no Supabase client configured, store booking only in memory.
-    bookings.push({ date, time, lane, name, phone, email, club, gender, age });
-    renderCalendar();
-    messageBox.textContent = 'Reservasjonen ble registrert (kun lokalt).';
-    messageBox.classList.add('success');
-    return;
-  }
-  // Insert the booking into Supabase
-  const { error } = await supabase.from('bookings').insert([
-    { date, time, lane, name, phone, email, club, gender, age }
-  ]);
-  if (error) {
-    console.error('Error creating booking:', error);
-    messageBox.textContent = 'Det oppstod en feil under lagring av reservasjonen.';
-    messageBox.classList.add('error');
-    return;
-  }
-  // Update local state and UI
-  bookings.push({ date, time, lane, name, phone, email, club, gender, age });
-  renderCalendar();
-  // Clear form fields
-  timeSelect.value = '';
+  // Clear selection and form
+  selectedSlots = [];
+  updateSummary();
+  renderMonthCalendar();
+  timesList.innerHTML = '';
   nameInput.value = '';
   phoneInput.value = '';
   emailInput.value = '';
   clubInput.value = '';
   genderSelect.value = '';
   ageInput.value = '';
-  messageBox.textContent = 'Reservasjonen ble registrert!';
-  messageBox.classList.add('success');
+  summaryMessageBox.textContent = 'Bestillingen er sendt! Vennligst betal via Vipps.';
+  summaryMessageBox.classList.add('success');
+}
+
+// Event listeners for month navigation and booking submission
+prevMonthBtn.addEventListener('click', async () => {
+  if (currentMonth === 0) {
+    currentMonth = 11;
+    currentYear -= 1;
+  } else {
+    currentMonth -= 1;
+  }
+  await loadMonthBookings(currentYear, currentMonth);
+  renderMonthCalendar();
+  timesList.innerHTML = '';
+});
+nextMonthBtn.addEventListener('click', async () => {
+  if (currentMonth === 11) {
+    currentMonth = 0;
+    currentYear += 1;
+  } else {
+    currentMonth += 1;
+  }
+  await loadMonthBookings(currentYear, currentMonth);
+  renderMonthCalendar();
+  timesList.innerHTML = '';
+});
+
+submitBookingBtn.addEventListener('click', submitBooking);
+
+// Initialise the page by loading the current month's bookings and rendering the calendar
+(async function init() {
+  await loadMonthBookings(currentYear, currentMonth);
+  renderMonthCalendar();
+})();
+
+// Set current year in footer
+const yearSpan = document.getElementById('year');
+if (yearSpan) {
+  yearSpan.textContent = new Date().getFullYear();
 }
