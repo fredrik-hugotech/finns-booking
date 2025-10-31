@@ -167,9 +167,10 @@ function computeDateStatus(dateStr) {
   return 'available';
 }
 
-function getTimeStatus(dateStr, time) {
+function getTimeStatus(dateStr, time, { includePending = true } = {}) {
   let occupied = 0;
-  [...preBookedTimes, ...monthBookings, ...selectedSlots].forEach((booking) => {
+  const pending = includePending ? selectedSlots : [];
+  [...preBookedTimes, ...monthBookings, ...pending].forEach((booking) => {
     if (booking.date === dateStr && booking.time === time) {
       occupied += booking.lane === 'full' ? 2 : 1;
     }
@@ -536,11 +537,44 @@ async function submitBooking() {
   }
 
   // Sjekk tilgjengelighet igjen
-  const unavailable = selectedSlots.some((slot) => {
-    const { available } = getTimeStatus(slot.date, slot.time);
-    const needed = slot.lane === 'full' ? 2 : 1;
-    return available < needed;
-  });
+  let unavailable = false;
+
+  if (supabaseClient) {
+    const monthCache = new Map();
+    const ensureMonthData = async (dateStr) => {
+      const dateObj = parseDate(dateStr);
+      if (Number.isNaN(dateObj.getTime())) {
+        return;
+      }
+      const key = `${dateObj.getFullYear()}-${dateObj.getMonth()}`;
+      if (monthCache.has(key)) {
+        monthBookings = monthCache.get(key);
+        return;
+      }
+      await loadMonthBookings(dateObj.getFullYear(), dateObj.getMonth());
+      monthCache.set(key, monthBookings.slice());
+    };
+
+    for (const slot of selectedSlots) {
+      // Sørg for at vi har ferske data fra Supabase for måneden før vi sjekker
+      await ensureMonthData(slot.date);
+      const { available } = getTimeStatus(slot.date, slot.time, { includePending: false });
+      const needed = slot.lane === 'full' ? 2 : 1;
+      if (available < needed) {
+        unavailable = true;
+        break;
+      }
+    }
+
+    // Sett tilbake kalenderdataene til aktiv måned slik at visningen holder seg i synk
+    await ensureMonthData(formatDate(new Date(currentYear, currentMonth, 1)));
+  } else {
+    unavailable = selectedSlots.some((slot) => {
+      const { available } = getTimeStatus(slot.date, slot.time, { includePending: false });
+      const needed = slot.lane === 'full' ? 2 : 1;
+      return available < needed;
+    });
+  }
 
   if (unavailable) {
     summaryMessageBox.textContent = 'En eller flere av de valgte tidene er ikke lenger tilgjengelige.';
