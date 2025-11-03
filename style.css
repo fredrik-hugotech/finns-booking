@@ -27,6 +27,112 @@ body {
   color: var(--text-dark);
 }
 
+body.auth-locked {
+  overflow: hidden;
+}
+
+.page[hidden] {
+  display: none;
+}
+
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1.5rem, 5vw, 3rem);
+  background: linear-gradient(135deg, rgba(0, 56, 44, 0.88), rgba(0, 121, 92, 0.82));
+  backdrop-filter: blur(6px);
+  z-index: 1200;
+}
+
+.login-overlay[hidden] {
+  display: none;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  padding: clamp(1.75rem, 4vw, 2.4rem);
+}
+
+.login-card-header h1 {
+  margin: 0;
+  font-size: clamp(1.6rem, 3.6vw, 2.1rem);
+  color: var(--green-900);
+}
+
+.login-card-header p {
+  margin: 0.5rem 0 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.login-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.login-field input {
+  font: inherit;
+  border: 1px solid rgba(0, 56, 44, 0.18);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.85rem;
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-field input:focus-visible {
+  border-color: var(--green-600);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 121, 92, 0.18);
+}
+
+.login-error {
+  min-height: 1.4rem;
+  margin: 0;
+  color: #c62828;
+  font-weight: 600;
+}
+
+.login-card-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.login-card-footer button {
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--green-800), var(--green-600));
+  color: var(--white);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.7rem 1.8rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-card-footer button:hover,
+.login-card-footer button:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 25px rgba(0, 56, 44, 0.22);
+  outline: none;
+}
+
 .page {
   min-height: 100vh;
   display: flex;
@@ -329,36 +435,6 @@ main {
   color: var(--text-muted);
 }
 
-.bookings-toggle {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: -0.1rem;
-}
-
-.booking-toggle-button {
-  background: rgba(0, 121, 92, 0.12);
-  border: 1px solid rgba(0, 121, 92, 0.25);
-  color: var(--green-900);
-  padding: 0.35rem 0.95rem;
-  border-radius: 999px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
-}
-
-.booking-toggle-button:hover,
-.booking-toggle-button:focus-visible {
-  background: rgba(0, 121, 92, 0.18);
-  transform: translateY(-2px);
-  outline: none;
-}
-
-.booking-toggle-button[aria-pressed='true'] {
-  background: var(--green-900);
-  border-color: var(--green-900);
-  color: var(--white);
-}
-
 .time-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -430,6 +506,21 @@ main {
   display: flex;
   align-items: center;
   gap: 0.3rem;
+}
+
+.booking-lane {
+  font-weight: 700;
+  color: var(--green-800);
+}
+
+.booking-name {
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.booking-contact {
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
 
 .selected-slots p {
@@ -804,16 +895,6 @@ footer {
 
   .time-row button {
     width: 100%;
-  }
-
-  .bookings-toggle {
-    justify-content: flex-start;
-  }
-
-  .booking-toggle-button {
-    width: 100%;
-    text-align: center;
-    padding: 0.4rem 0.85rem;
   }
 
   .selected-slots li {

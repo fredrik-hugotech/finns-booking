@@ -19,6 +19,19 @@ const supabaseClient =
     ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     : null;
 
+const AUTH_USERNAME = 'finnsfairway';
+const AUTH_PASSWORD = '12345';
+
+let isAuthenticated = false;
+let bookingInitialised = false;
+
+const loginOverlay = document.getElementById('loginOverlay');
+const loginForm = document.getElementById('loginForm');
+const loginUsernameInput = document.getElementById('loginUsername');
+const loginPasswordInput = document.getElementById('loginPassword');
+const loginErrorBox = document.getElementById('loginError');
+const protectedPage = document.querySelector('.page');
+
 const CALENDAR_BUCKET = 'booking-calendar';
 const CALENDAR_FILENAME = 'bookings.ics';
 let calendarSignedUrl = null;
@@ -116,7 +129,6 @@ const confirmationScreen = document.getElementById('confirmationScreen');
 const confirmationSlotsList = document.getElementById('confirmationSlots');
 const confirmationTotal = document.getElementById('confirmationTotal');
 const confirmationBackBtn = document.getElementById('confirmationBack');
-let showBookedDetails = false;
 
 function escapeICS(text) {
   if (!text) return '';
@@ -455,41 +467,17 @@ function loadTimesForDate(dateStr) {
   heading.textContent = `Tilgjengelige tider – ${formatDateLabel(dateStr)}`;
   timesList.appendChild(heading);
 
-  const namedBookings = monthBookings
-    .filter((booking) => {
-      if (booking.date !== dateStr) {
-        return false;
-      }
-      const nameText = String(booking.name ?? '').trim();
-      return nameText !== '';
-    })
+  const bookingsForDate = monthBookings
+    .filter((booking) => booking.date === dateStr)
     .map((booking) => ({
       ...booking,
       lane: normalizeLane(booking.lane),
-      name: String(booking.name ?? '').trim()
+      name: String(booking.name ?? '').trim(),
+      email: String(booking.email ?? '').trim(),
+      phone: String(booking.phone ?? '').trim()
     }));
 
-  if (namedBookings.length === 0) {
-    showBookedDetails = false;
-  }
-
-  if (namedBookings.length > 0) {
-    const toggleWrapper = document.createElement('div');
-    toggleWrapper.classList.add('bookings-toggle');
-    const toggleBtn = document.createElement('button');
-    toggleBtn.type = 'button';
-    toggleBtn.classList.add('booking-toggle-button');
-    toggleBtn.textContent = showBookedDetails ? 'Skjul bookede tider' : 'Vis bookede tider';
-    toggleBtn.setAttribute('aria-pressed', showBookedDetails ? 'true' : 'false');
-    toggleBtn.addEventListener('click', () => {
-      showBookedDetails = !showBookedDetails;
-      loadTimesForDate(dateStr);
-    });
-    toggleWrapper.appendChild(toggleBtn);
-    timesList.appendChild(toggleWrapper);
-  }
-
-  const bookingsByTime = namedBookings.reduce((acc, booking) => {
+  const bookingsByTime = bookingsForDate.reduce((acc, booking) => {
     if (!acc[booking.time]) {
       acc[booking.time] = [];
     }
@@ -520,10 +508,6 @@ function loadTimesForDate(dateStr) {
     if (avail > 0) {
       hasAvailable = true;
     }
-    if (avail <= 0 && !showBookedDetails) {
-      return;
-    }
-
     const row = document.createElement('div');
     row.classList.add('time-row');
     if (avail <= 0) {
@@ -573,14 +557,37 @@ function loadTimesForDate(dateStr) {
         }
         return a.name.localeCompare(b.name);
       });
-    if (showBookedDetails && bookingsForTime.length > 0) {
+    if (bookingsForTime.length > 0) {
       const bookedList = document.createElement('ul');
       bookedList.classList.add('time-bookings');
       bookingsForTime.forEach((booking) => {
         const item = document.createElement('li');
         item.classList.add('time-booking-item');
         const laneLabel = booking.lane === 'full' ? 'Full bane' : 'Halv bane';
-        item.textContent = `${laneLabel}: ${booking.name}`;
+        const nameText = booking.name || 'Ukjent navn';
+        const contactParts = [];
+        if (booking.email) contactParts.push(booking.email);
+        if (booking.phone) contactParts.push(booking.phone);
+
+        const laneSpan = document.createElement('span');
+        laneSpan.classList.add('booking-lane');
+        laneSpan.textContent = laneLabel;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.classList.add('booking-name');
+        nameSpan.textContent = nameText;
+
+        item.appendChild(laneSpan);
+        item.appendChild(document.createTextNode(': '));
+        item.appendChild(nameSpan);
+
+        if (contactParts.length > 0) {
+          const contactSpan = document.createElement('span');
+          contactSpan.classList.add('booking-contact');
+          contactSpan.textContent = contactParts.join(' · ');
+          item.appendChild(document.createTextNode(' – '));
+          item.appendChild(contactSpan);
+        }
         bookedList.appendChild(item);
       });
       row.appendChild(bookedList);
@@ -735,7 +742,6 @@ async function submitBooking() {
   // Clear selection and form
   selectedSlots = [];
   activeDate = null;
-  showBookedDetails = false;
   updateSummary();
   renderMonthCalendar();
   timesList.innerHTML = '';
@@ -790,7 +796,6 @@ prevMonthBtn.addEventListener('click', async () => {
   }
   await loadMonthBookings(currentYear, currentMonth);
   activeDate = null;
-  showBookedDetails = false;
   renderMonthCalendar();
   timesList.innerHTML = '';
 });
@@ -803,7 +808,6 @@ nextMonthBtn.addEventListener('click', async () => {
   }
   await loadMonthBookings(currentYear, currentMonth);
   activeDate = null;
-  showBookedDetails = false;
   renderMonthCalendar();
   timesList.innerHTML = '';
 });
@@ -819,13 +823,6 @@ if (confirmationBackBtn) {
   });
 }
 
-// Initialise the page by loading the current month's bookings and rendering the calendar
-(async function init() {
-  await loadMonthBookings(currentYear, currentMonth);
-  await refreshCalendarFeed();
-  renderMonthCalendar();
-})();
-
 // Hent og oppdater kalenderen periodisk (uten innlogging)
 const POLL_INTERVAL_MS = 30000; // 30 sekunder
 let pollTimer = null;
@@ -833,27 +830,121 @@ let pollTimer = null;
 function startCalendarPolling() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
+    if (!isAuthenticated) {
+      return;
+    }
     try {
       await loadMonthBookings(currentYear, currentMonth);
-      renderMonthCalendar();
-      renderDayView();
-      renderWeekView();
+      if (activeDate) {
+        loadTimesForDate(activeDate);
+      } else {
+        renderMonthCalendar();
+      }
     } catch (e) {
       console.debug('Polling-feil (ignoreres):', e?.message || e);
     }
   }, POLL_INTERVAL_MS);
 }
 
-startCalendarPolling();
-
 document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState === 'visible') {
+  if (document.visibilityState === 'visible' && isAuthenticated) {
     await loadMonthBookings(currentYear, currentMonth);
-    renderMonthCalendar();
-    renderDayView();
-    renderWeekView();
+    if (activeDate) {
+      loadTimesForDate(activeDate);
+    } else {
+      renderMonthCalendar();
+    }
   }
 });
+
+function todayDateString() {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+}
+
+async function initBooking() {
+  if (bookingInitialised) {
+    return;
+  }
+  bookingInitialised = true;
+  try {
+    const today = new Date();
+    currentYear = today.getFullYear();
+    currentMonth = today.getMonth();
+    await loadMonthBookings(currentYear, currentMonth);
+    await refreshCalendarFeed();
+    const todayStr = todayDateString();
+    loadTimesForDate(todayStr);
+    startCalendarPolling();
+  } catch (error) {
+    bookingInitialised = false;
+    console.error('Kunne ikke initialisere kalenderen:', error);
+    throw error;
+  }
+}
+
+async function processLogin() {
+  if (!loginUsernameInput || !loginPasswordInput) {
+    return;
+  }
+  const username = loginUsernameInput.value.trim();
+  const password = loginPasswordInput.value;
+
+  if (username !== AUTH_USERNAME || password !== AUTH_PASSWORD) {
+    isAuthenticated = false;
+    if (loginErrorBox) {
+      loginErrorBox.textContent = 'Feil brukernavn eller passord.';
+    }
+    loginPasswordInput.value = '';
+    loginPasswordInput.focus();
+    return;
+  }
+
+  isAuthenticated = true;
+  if (loginErrorBox) {
+    loginErrorBox.textContent = '';
+  }
+  if (loginOverlay) {
+    loginOverlay.hidden = true;
+  }
+  if (protectedPage) {
+    protectedPage.hidden = false;
+  }
+  document.body.classList.remove('auth-locked');
+
+  try {
+    await initBooking();
+  } catch (error) {
+    isAuthenticated = false;
+    if (loginErrorBox) {
+      loginErrorBox.textContent = 'Klarte ikke å laste kalenderen. Prøv igjen.';
+    }
+    if (loginOverlay) {
+      loginOverlay.hidden = false;
+    }
+    if (protectedPage) {
+      protectedPage.hidden = true;
+    }
+    document.body.classList.add('auth-locked');
+    console.error('Feil under innlasting av kalenderen:', error);
+    loginPasswordInput.value = '';
+    loginPasswordInput.focus();
+    return;
+  }
+
+  loginForm?.reset();
+}
+
+if (loginForm) {
+  loginForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    processLogin();
+  });
+}
+
+if (loginUsernameInput && !loginUsernameInput.value) {
+  loginUsernameInput.focus();
+}
 
 // Set current year in footer
 const yearSpan = document.getElementById('year');

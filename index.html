@@ -12,8 +12,31 @@
     />
     <link rel="stylesheet" href="style.css" />
   </head>
-  <body>
-    <div class="page">
+  <body class="auth-locked">
+    <section id="loginOverlay" class="login-overlay" aria-labelledby="loginTitle">
+      <form id="loginForm" class="login-card" novalidate>
+        <div class="login-card-header">
+          <h1 id="loginTitle">Finns.Fairway tilgang</h1>
+          <p>Logg inn for å se kalenderen med alle bookinger.</p>
+        </div>
+        <div class="login-card-body">
+          <label class="login-field">
+            <span>Brukernavn</span>
+            <input type="text" id="loginUsername" name="username" autocomplete="username" required />
+          </label>
+          <label class="login-field">
+            <span>Passord</span>
+            <input type="password" id="loginPassword" name="password" autocomplete="current-password" required />
+          </label>
+          <p id="loginError" class="login-error" role="alert" aria-live="polite"></p>
+        </div>
+        <div class="login-card-footer">
+          <button type="submit" id="loginSubmit">Logg inn</button>
+        </div>
+      </form>
+    </section>
+
+    <div class="page" hidden>
       <header class="site-header">
         <div class="header-inner">
           <img src="ff-logo-gronn.png" alt="Finns Fairway logo" class="logo" />
