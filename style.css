@@ -37,7 +37,8 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem clamp(1.5rem, 4vw, 4rem);
+  gap: clamp(1rem, 3vw, 2.5rem);
+  padding: 1.25rem clamp(1.25rem, 4vw, 3rem);
   background: linear-gradient(120deg, var(--green-900), var(--green-600));
   color: var(--white);
   position: sticky;
@@ -92,7 +93,7 @@ body {
 
 main {
   flex: 1;
-  padding: clamp(2rem, 4vw, 4rem) clamp(1.5rem, 4vw, 4rem) 4rem;
+  padding: clamp(1.75rem, 4vw, 4rem) clamp(1.25rem, 4vw, 4rem) clamp(3rem, 6vw, 4.5rem);
 }
 
 .hero {
@@ -136,13 +137,13 @@ main {
 .content-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: clamp(1.5rem, 3vw, 2.5rem);
+  gap: clamp(1.25rem, 3vw, 2.5rem);
 }
 
 .card {
   background: var(--white);
   border-radius: var(--radius-lg);
-  padding: clamp(1.5rem, 3vw, 2rem);
+  padding: clamp(1.25rem, 3vw, 2rem);
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
@@ -238,16 +239,16 @@ main {
 .month-calendar {
   display: grid;
   grid-template-columns: repeat(7, minmax(40px, 1fr));
-  gap: 0.75rem;
+  gap: clamp(0.5rem, 1.5vw, 0.75rem);
 }
 
 .day-cell {
   background: var(--sand-50);
   border-radius: var(--radius-sm);
-  padding: 0.75rem 0.25rem;
+  padding: clamp(0.55rem, 2vw, 0.75rem) 0.25rem;
   text-align: center;
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: clamp(0.85rem, 2vw, 0.95rem);
   color: var(--text-dark);
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border 0.2s ease;
@@ -332,8 +333,8 @@ main {
   display: grid;
   grid-template-columns: 1fr auto auto;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 0.75rem;
+  gap: clamp(0.5rem, 2vw, 0.75rem);
+  padding: 0.65rem clamp(0.6rem, 2.5vw, 0.75rem);
   border-radius: var(--radius-sm);
   background: rgba(0, 121, 92, 0.06);
 }
@@ -493,7 +494,7 @@ main {
 .payment-info {
   background: rgba(0, 121, 92, 0.06);
   border-radius: var(--radius-md);
-  padding: 1.2rem;
+  padding: clamp(1rem, 3vw, 1.4rem);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -547,16 +548,18 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: clamp(1.5rem, 4vw, 3rem);
+  padding: clamp(1rem, 4vw, 3rem);
   z-index: 100;
 }
 
 .confirmation-card {
   background: var(--white);
   border-radius: var(--radius-lg);
-  padding: clamp(2rem, 4vw, 3rem);
-  max-width: min(520px, 90vw);
+  padding: clamp(1.75rem, 4vw, 3rem);
+  max-width: min(520px, 92vw);
   width: 100%;
+  max-height: min(620px, 92vh);
+  overflow-y: auto;
   box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
@@ -671,6 +674,49 @@ footer {
 }
 
 @media (max-width: 720px) {
+  .site-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .header-inner {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .header-cta {
+    width: 100%;
+  }
+
+  .header-link {
+    display: inline-flex;
+    width: 100%;
+    justify-content: center;
+    margin-top: 0.5rem;
+  }
+
+  main {
+    padding-inline: clamp(1rem, 6vw, 1.5rem);
+  }
+
+  .hero {
+    padding: clamp(1.75rem, 6vw, 2.5rem);
+    text-align: center;
+  }
+
+  .hero-content p {
+    margin-inline: auto;
+  }
+
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card {
+    padding: clamp(1rem, 6vw, 1.5rem);
+    gap: 1.25rem;
+  }
+
   .form-row.inline {
     flex-direction: column;
   }
@@ -683,6 +729,84 @@ footer {
   .month-nav button {
     width: 40px;
     height: 40px;
+  }
+
+  .time-row {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .time-row button {
+    width: 100%;
+  }
+
+  .selected-slots li {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .remove-button {
+    align-self: flex-end;
+  }
+
+  .payment-info {
+    align-items: center;
+    text-align: center;
+  }
+
+  .payment-info p {
+    font-size: 0.95rem;
+  }
+
+  .confirmation-payment-note {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 540px) {
+  .site-header {
+    padding-inline: clamp(1rem, 6vw, 1.25rem);
+  }
+
+  .logo {
+    width: clamp(80px, 22vw, 110px);
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .legend {
+    width: 100%;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .month-calendar {
+    gap: 0.45rem;
+  }
+
+  .day-cell {
+    padding: 0.5rem 0.2rem;
+    font-size: 0.8rem;
+  }
+
+  .booking-form button,
+  .confirmation-back {
+    width: 100%;
+  }
+
+  .confirmation-card {
+    padding: clamp(1.4rem, 7vw, 2rem);
+  }
+
+  .confirmation-qr {
+    width: min(200px, 80%);
+  }
+
+  footer {
+    padding-block: 1.5rem;
   }
 }
 
