@@ -19,6 +19,11 @@ const supabaseClient =
     ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     : null;
 
+const CALENDAR_BUCKET = 'booking-calendar';
+const CALENDAR_FILENAME = 'bookings.ics';
+let calendarSignedUrl = null;
+let calendarBucketEnsured = false;
+
 // Define the standard time slots (24‑hour format) you wish to offer.
 const availableTimes = [
   '08:00',
@@ -46,6 +51,18 @@ function formatTimeInterval(startTime) {
   const endMinute = endTotalMinutes % 60;
   const pad = (value) => String(value).padStart(2, '0');
   return `${pad(hour)}:${pad(minute)}-${pad(endHour)}:${pad(endMinute)}`;
+}
+
+function addHourToTime(startTime) {
+  if (!startTime) return '00:00';
+  const [hourStr, minuteStr] = startTime.split(':');
+  const hour = Number(hourStr);
+  const minute = Number(minuteStr);
+  const endTotalMinutes = hour * 60 + minute + 60;
+  const endHour = Math.floor(endTotalMinutes / 60) % 24;
+  const endMinute = endTotalMinutes % 60;
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${pad(endHour)}:${pad(endMinute)}`;
 }
 
 // List any pre‑booked times here.  Each entry must include a date
@@ -100,6 +117,180 @@ const confirmationSlotsList = document.getElementById('confirmationSlots');
 const confirmationTotal = document.getElementById('confirmationTotal');
 const confirmationBackBtn = document.getElementById('confirmationBack');
 let showBookedDetails = false;
+
+function escapeICS(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/\\/g, '\\\\')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;');
+}
+
+function formatICSDateTimeLocal(dateStr, timeStr) {
+  if (!dateStr || !timeStr) return '';
+  const date = dateStr.replace(/-/g, '');
+  const time = timeStr.replace(':', '');
+  return `${date}T${time}00`;
+}
+
+function formatICSDateTimeUTC(dateObj) {
+  const pad = (value) => String(value).padStart(2, '0');
+  const year = dateObj.getUTCFullYear();
+  const month = pad(dateObj.getUTCMonth() + 1);
+  const day = pad(dateObj.getUTCDate());
+  const hours = pad(dateObj.getUTCHours());
+  const minutes = pad(dateObj.getUTCMinutes());
+  const seconds = pad(dateObj.getUTCSeconds());
+  return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
+}
+
+async function ensureCalendarBucket() {
+  if (calendarBucketEnsured || !supabaseClient) return calendarBucketEnsured;
+  try {
+    const { data, error } = await supabaseClient.storage.getBucket(CALENDAR_BUCKET);
+    if (data && !error) {
+      calendarBucketEnsured = true;
+      return true;
+    }
+  } catch (err) {
+    console.warn('Kunne ikke hente kalenderbøtte:', err);
+  }
+  try {
+    const { error: createError } = await supabaseClient.storage.createBucket(CALENDAR_BUCKET, {
+      public: false
+    });
+    if (createError && !String(createError.message || createError).includes('exists')) {
+      console.error('Feil ved opprettelse av kalenderbøtte:', createError);
+      return false;
+    }
+    calendarBucketEnsured = true;
+    return true;
+  } catch (err) {
+    console.error('Uventet feil ved opprettelse av kalenderbøtte:', err);
+    return false;
+  }
+}
+
+function generateCalendarFeed(bookings) {
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Finns Fairway//Booking Calendar//NO',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'X-WR-CALNAME:Finns Fairway Booking',
+    'X-WR-TIMEZONE:Europe/Oslo',
+    'BEGIN:VTIMEZONE',
+    'TZID:Europe/Oslo',
+    'X-LIC-LOCATION:Europe/Oslo',
+    'BEGIN:DAYLIGHT',
+    'TZOFFSETFROM:+0100',
+    'TZOFFSETTO:+0200',
+    'TZNAME:CEST',
+    'DTSTART:19700329T020000',
+    'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU',
+    'END:DAYLIGHT',
+    'BEGIN:STANDARD',
+    'TZOFFSETFROM:+0200',
+    'TZOFFSETTO:+0100',
+    'TZNAME:CET',
+    'DTSTART:19701025T030000',
+    'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU',
+    'END:STANDARD',
+    'END:VTIMEZONE'
+  ];
+
+  const nowStamp = formatICSDateTimeUTC(new Date());
+
+  bookings.forEach((booking, index) => {
+    if (!booking.date || !booking.time) return;
+    const laneType = normalizeLane(booking.lane);
+    const laneLabel = laneType === 'full' ? 'Full bane' : 'Halv bane';
+    const start = formatICSDateTimeLocal(booking.date, booking.time);
+    const end = formatICSDateTimeLocal(booking.date, addHourToTime(booking.time));
+    const summary = `${laneLabel} – ${booking.name || 'Ukjent'}`;
+    const detailsList = [
+      booking.name ? `Navn: ${booking.name}` : null,
+      booking.email ? `E-post: ${booking.email}` : null,
+      booking.phone ? `Telefon: ${booking.phone}` : null,
+      booking.gender ? `Kjønn: ${booking.gender}` : null,
+      booking.age ? `Årskull: ${booking.age}` : null,
+      booking.club ? `Klubb: ${booking.club}` : null
+    ]
+      .filter(Boolean)
+      .join('\n');
+    const details = detailsList || 'Ingen detaljer registrert.';
+    const uidSource = booking.id
+      ? `booking-${booking.id}`
+      : `booking-${booking.date}-${booking.time}-${index}`;
+    lines.push('BEGIN:VEVENT');
+    lines.push(`UID:${escapeICS(uidSource)}@finnsfairway.no`);
+    lines.push(`DTSTAMP:${nowStamp}`);
+    lines.push(`DTSTART;TZID=Europe/Oslo:${start}`);
+    lines.push(`DTEND;TZID=Europe/Oslo:${end}`);
+    lines.push(`SUMMARY:${escapeICS(summary)}`);
+    lines.push(`DESCRIPTION:${escapeICS(details)}`);
+    lines.push('LOCATION:Sparebanken Norge Arena');
+    lines.push('END:VEVENT');
+  });
+
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+
+async function refreshCalendarFeed() {
+  if (!supabaseClient) return;
+  try {
+    const { data, error } = await supabaseClient
+      .from('bookings')
+      .select('*')
+      .order('date', { ascending: true })
+      .order('time', { ascending: true });
+    if (error) {
+      console.error('Kunne ikke laste bookinger for kalender:', error);
+      return;
+    }
+    const normalized = (data || []).map((booking) => ({
+      ...booking,
+      lane: normalizeLane(booking.lane)
+    }));
+    const icsContent = generateCalendarFeed(normalized);
+    const bucketReady = await ensureCalendarBucket();
+    if (!bucketReady) {
+      console.warn('Kalenderbøtte ikke klar, hopper over oppdatering.');
+      return;
+    }
+    const blob = new Blob([icsContent], { type: 'text/calendar' });
+    const { error: uploadError } = await supabaseClient.storage
+      .from(CALENDAR_BUCKET)
+      .upload(CALENDAR_FILENAME, blob, {
+        upsert: true,
+        contentType: 'text/calendar'
+      });
+    if (uploadError) {
+      console.error('Feil ved opplasting av kalenderfil:', uploadError);
+      return;
+    }
+    const { data: signedData, error: signedError } = await supabaseClient.storage
+      .from(CALENDAR_BUCKET)
+      .createSignedUrl(CALENDAR_FILENAME, 60 * 60 * 24 * 30);
+    if (signedError) {
+      console.error('Kunne ikke lage delt lenke til kalenderfilen:', signedError);
+      return;
+    }
+    calendarSignedUrl = signedData?.signedUrl || null;
+    if (calendarSignedUrl) {
+      if (typeof window !== 'undefined') {
+        window.bookingCalendarLink = calendarSignedUrl;
+      }
+      console.info('Kalender oppdatert. Del denne lenken med Google Kalender:', calendarSignedUrl);
+    }
+  } catch (err) {
+    console.error('Uventet feil ved oppdatering av kalenderen:', err);
+  }
+}
 
 /**
  * Load all bookings for the given month (inclusive).
@@ -523,6 +714,7 @@ async function submitBooking() {
 
     // Refresh month bookings so the calendar updates
     await loadMonthBookings(currentYear, currentMonth);
+    await refreshCalendarFeed();
   } else {
     // If Supabase isn't configured, just add to monthBookings in memory
     selectedSlots.forEach((slot) => {
@@ -630,6 +822,7 @@ if (confirmationBackBtn) {
 // Initialise the page by loading the current month's bookings and rendering the calendar
 (async function init() {
   await loadMonthBookings(currentYear, currentMonth);
+  await refreshCalendarFeed();
   renderMonthCalendar();
 })();
 
