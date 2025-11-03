@@ -97,10 +97,10 @@ async function loadMonthBookings(year, month) {
     monthBookings = [];
     return;
   }
-  const startDate = new Date(year, month, 1);
-  const endDate = new Date(year, month + 1, 0);
-  const startStr = startDate.toISOString().split('T')[0];
-  const endStr = endDate.toISOString().split('T')[0];
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const pad = (value) => String(value).padStart(2, '0');
+  const startStr = `${year}-${pad(month + 1)}-01`;
+  const endStr = `${year}-${pad(month + 1)}-${pad(daysInMonth)}`;
   const { data, error } = await supabaseClient
     .from('bookings')
     .select('*')
