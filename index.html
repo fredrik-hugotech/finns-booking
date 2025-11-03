@@ -34,8 +34,8 @@
           <div class="hero-content">
             <h2>Bestill tid i Sparebanken Sør Arena</h2>
             <p>
-              Velg en dato i kalenderen, finn tiden som passer og sikre deg plass. Fargekodene gir deg full kontroll over
-              ledig kapasitet – grønt for ledig, gult for begrenset og rødt for fullbooket.
+              Velg en dato i kalenderen, finn tiden som passer og sikre deg plass. Betaling via Vipps bekrefter den endelige
+              reservasjonen.
             </p>
           </div>
         </section>
@@ -158,6 +158,17 @@
         <p>&copy; <span id="year"></span> Finns.Fairway</p>
       </footer>
     </div>
+
+    <section id="confirmationScreen" class="confirmation-screen" hidden>
+      <div class="confirmation-card">
+        <h2>Takk for bestillingen!</h2>
+        <p>Du har sendt inn følgende tider:</p>
+        <ul id="confirmationSlots" class="confirmation-slots"></ul>
+        <p id="confirmationTotal" class="confirmation-total"></p>
+        <p class="confirmation-note">Tidene er ikke endelig reservert før betalingen er gjennomført via Vipps.</p>
+        <button type="button" id="confirmationBack" class="confirmation-back">Tilbake til bookingsiden</button>
+      </div>
+    </section>
 
     <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="script.js"></script>

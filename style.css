@@ -517,6 +517,89 @@ main {
   box-shadow: 0 12px 24px rgba(0, 56, 44, 0.12);
 }
 
+.confirmation-screen {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 23, 19, 0.72);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  z-index: 100;
+}
+
+.confirmation-card {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: clamp(2rem, 4vw, 3rem);
+  max-width: min(520px, 90vw);
+  width: 100%;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  text-align: center;
+}
+
+.confirmation-card h2 {
+  margin: 0;
+  color: var(--green-900);
+  font-size: clamp(1.6rem, 3vw, 2rem);
+}
+
+.confirmation-slots {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+  text-align: left;
+}
+
+.confirmation-slots li {
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  background: rgba(0, 121, 92, 0.08);
+  color: var(--green-900);
+  font-weight: 600;
+}
+
+.confirmation-note {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.confirmation-total {
+  margin: 0;
+  font-weight: 700;
+  color: var(--green-900);
+}
+
+.confirmation-back {
+  align-self: center;
+  border: none;
+  background: linear-gradient(120deg, var(--green-900), var(--green-600));
+  color: var(--white);
+  padding: 0.9rem 2.4rem;
+  border-radius: 999px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.confirmation-back:hover,
+.confirmation-back:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+body.has-overlay {
+  overflow: hidden;
+}
+
 .guidelines {
   margin-top: clamp(3rem, 6vw, 4.5rem);
 }

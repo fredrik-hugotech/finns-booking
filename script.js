@@ -21,7 +21,19 @@ const supabaseClient =
 
 // Define the standard time slots (24‑hour format) you wish to offer.
 const availableTimes = [
-  '08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'
+  '08:00',
+  '09:00',
+  '10:00',
+  '11:00',
+  '12:00',
+  '13:00',
+  '14:00',
+  '15:00',
+  '16:00',
+  '17:00',
+  '18:00',
+  '19:00',
+  '20:00'
 ];
 
 // List any pre‑booked times here.  Each entry must include a date
@@ -30,6 +42,21 @@ const availableTimes = [
 const preBookedTimes = [
   // Example: { date: '2025-11-01', time: '16:00', lane: 'full' },
 ];
+
+const FULL_LANE_VALUES = new Set(['full', 'full bane', 'full lane']);
+const HALF_LANE_VALUES = new Set(['half', 'half lane', 'halv', 'halv bane']);
+
+function normalizeLane(lane) {
+  if (!lane) return '';
+  const value = String(lane).trim().toLowerCase();
+  if (FULL_LANE_VALUES.has(value)) return 'full';
+  if (HALF_LANE_VALUES.has(value)) return 'half';
+  return value;
+}
+
+function laneUnits(lane) {
+  return normalizeLane(lane) === 'full' ? 2 : 1;
+}
 
 // Booking application state
 const priceFull = 1990;
@@ -56,6 +83,10 @@ const genderSelect = document.getElementById('gender');
 const ageInput = document.getElementById('age');
 const submitBookingBtn = document.getElementById('submitBooking');
 const summaryMessageBox = document.getElementById('summaryMessage');
+const confirmationScreen = document.getElementById('confirmationScreen');
+const confirmationSlotsList = document.getElementById('confirmationSlots');
+const confirmationTotal = document.getElementById('confirmationTotal');
+const confirmationBackBtn = document.getElementById('confirmationBack');
 
 /**
  * Load all bookings for the given month (inclusive).
@@ -79,7 +110,10 @@ async function loadMonthBookings(year, month) {
     console.error('Error loading month bookings:', error);
     monthBookings = [];
   } else {
-    monthBookings = data || [];
+    monthBookings = (data || []).map((booking) => ({
+      ...booking,
+      lane: normalizeLane(booking.lane)
+    }));
   }
 }
 
@@ -94,19 +128,19 @@ function computeDateStatus(dateStr) {
   // Occupy units from preBookedTimes
   preBookedTimes.forEach((b) => {
     if (b.date === dateStr) {
-      occupiedUnits += b.lane === 'full' ? 2 : 1;
+      occupiedUnits += laneUnits(b.lane);
     }
   });
   // Occupy units from month bookings
   monthBookings.forEach((b) => {
     if (b.date === dateStr) {
-      occupiedUnits += b.lane === 'full' ? 2 : 1;
+      occupiedUnits += laneUnits(b.lane);
     }
   });
   // Occupy units from current selection
   selectedSlots.forEach((b) => {
     if (b.date === dateStr) {
-      occupiedUnits += b.lane === 'full' ? 2 : 1;
+      occupiedUnits += laneUnits(b.lane);
     }
   });
   if (occupiedUnits >= totalUnits) return 'full';
@@ -217,17 +251,17 @@ function loadTimesForDate(dateStr) {
     let occupied = 0;
     preBookedTimes.forEach((b) => {
       if (b.date === dateStr && b.time === time) {
-        occupied += b.lane === 'full' ? 2 : 1;
+        occupied += laneUnits(b.lane);
       }
     });
     monthBookings.forEach((b) => {
       if (b.date === dateStr && b.time === time) {
-        occupied += b.lane === 'full' ? 2 : 1;
+        occupied += laneUnits(b.lane);
       }
     });
     selectedSlots.forEach((b) => {
       if (b.date === dateStr && b.time === time) {
-        occupied += b.lane === 'full' ? 2 : 1;
+        occupied += laneUnits(b.lane);
       }
     });
     const avail = 2 - occupied;
@@ -280,7 +314,8 @@ function loadTimesForDate(dateStr) {
  */
 function addSlot(dateStr, time, lane) {
   // Add slot to selections
-  selectedSlots.push({ date: dateStr, time, lane });
+  const laneValue = normalizeLane(lane) || lane;
+  selectedSlots.push({ date: dateStr, time, lane: laneValue });
   updateSummary();
   loadTimesForDate(dateStr);
 }
@@ -300,9 +335,11 @@ function updateSummary() {
   let total = 0;
   selectedSlots.forEach((slot, index) => {
     const li = document.createElement('li');
-    const price = slot.lane === 'full' ? priceFull : priceHalf;
+    const laneType = normalizeLane(slot.lane);
+    const laneLabel = laneType === 'full' ? 'Full bane' : 'Halv bane';
+    const price = laneType === 'full' ? priceFull : priceHalf;
     total += price;
-    li.textContent = `${slot.date} kl ${slot.time} – ${slot.lane === 'full' ? 'Full bane' : 'Halv bane'} (${price} kr) `;
+    li.textContent = `${slot.date} kl ${slot.time} – ${laneLabel} (${price} kr) `;
     const removeBtn = document.createElement('button');
     removeBtn.textContent = 'Fjern';
     removeBtn.classList.add('remove-button');
@@ -349,16 +386,16 @@ async function submitBooking() {
     let occupied = 0;
     preBookedTimes.forEach((b) => {
       if (b.date === slot.date && b.time === slot.time) {
-        occupied += b.lane === 'full' ? 2 : 1;
+        occupied += laneUnits(b.lane);
       }
     });
     monthBookings.forEach((b) => {
       if (b.date === slot.date && b.time === slot.time) {
-        occupied += b.lane === 'full' ? 2 : 1;
+        occupied += laneUnits(b.lane);
       }
     });
     const available = 2 - occupied;
-    const needed = slot.lane === 'full' ? 2 : 1;
+    const needed = laneUnits(slot.lane);
     if (available < needed) {
       unavailable = true;
     }
@@ -372,8 +409,8 @@ async function submitBooking() {
   if (supabaseClient) {
     const insertData = selectedSlots.map((slot) => ({
       date: slot.date,
-     time: slot.time,
-      lane: slot.lane,
+      time: slot.time,
+      lane: normalizeLane(slot.lane) || slot.lane,
       name,
       phone,
       email,
@@ -381,7 +418,7 @@ async function submitBooking() {
       gender,
       age
     }));
-      const { error } = await supabaseClient.from('bookings').insert(insertData, { returning: 'minimal' });
+    const { error } = await supabaseClient.from('bookings').insert(insertData, { returning: 'minimal' });
     if (error) {
       console.error('Error inserting bookings:', error);
       summaryMessageBox.textContent = 'Det oppstod en feil under lagring av bestillingen.';
@@ -394,9 +431,10 @@ async function submitBooking() {
   } else {
     // If Supabase isn't configured, just add to monthBookings in memory
     selectedSlots.forEach((slot) => {
-      monthBookings.push({ date: slot.date, time: slot.time, lane: slot.lane });
+      monthBookings.push({ date: slot.date, time: slot.time, lane: normalizeLane(slot.lane) });
     });
   }
+  const confirmedSlots = selectedSlots.map((slot) => ({ ...slot }));
   // Clear selection and form
   selectedSlots = [];
   activeDate = null;
@@ -409,8 +447,39 @@ async function submitBooking() {
   clubInput.value = '';
   genderSelect.value = '';
   ageInput.value = '';
-  summaryMessageBox.textContent = 'Bestillingen er sendt! Vennligst betal via Vipps.';
-  summaryMessageBox.classList.add('success');
+  summaryMessageBox.textContent = '';
+  summaryMessageBox.classList.remove('success', 'error');
+  showConfirmation(confirmedSlots);
+}
+
+function showConfirmation(slots) {
+  if (!confirmationScreen || !confirmationSlotsList || !confirmationTotal) {
+    return;
+  }
+  confirmationSlotsList.innerHTML = '';
+  let total = 0;
+  if (slots.length === 0) {
+    const li = document.createElement('li');
+    li.textContent = 'Ingen tider registrert.';
+    confirmationSlotsList.appendChild(li);
+    confirmationTotal.textContent = '';
+  } else {
+    slots.forEach((slot) => {
+      const laneType = normalizeLane(slot.lane);
+      const lane = laneType === 'full' ? 'Full bane' : 'Halv bane';
+      const price = laneType === 'full' ? priceFull : priceHalf;
+      total += price;
+      const li = document.createElement('li');
+      li.textContent = `${formatDateLabel(slot.date)} kl ${slot.time} – ${lane} (${price} kr)`;
+      confirmationSlotsList.appendChild(li);
+    });
+    confirmationTotal.textContent = `Total sum: ${total} kr`;
+  }
+  confirmationScreen.hidden = false;
+  document.body.classList.add('has-overlay');
+  if (confirmationBackBtn) {
+    confirmationBackBtn.focus();
+  }
 }
 
 // Event listeners for month navigation and booking submission
@@ -440,6 +509,15 @@ nextMonthBtn.addEventListener('click', async () => {
 });
 
 submitBookingBtn.addEventListener('click', submitBooking);
+
+if (confirmationBackBtn) {
+  confirmationBackBtn.addEventListener('click', () => {
+    confirmationScreen.hidden = true;
+    document.body.classList.remove('has-overlay');
+    confirmationSlotsList.innerHTML = '';
+    confirmationTotal.textContent = '';
+  });
+}
 
 // Initialise the page by loading the current month's bookings and rendering the calendar
 (async function init() {
