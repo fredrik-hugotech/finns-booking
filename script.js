@@ -119,30 +119,35 @@ async function loadMonthBookings(year, month) {
 
 /**
  * Compute booking status for a given date.
- * Returns "full" if no half-lane units remain, "half" if over 50% booked,
- * otherwise "available".
+ * Counts occupancy per time slot (capped at two units) so a day only
+ * registers as full when every available slot is taken. Returns "full" if
+ * no half-lane units remain, "half" if over 50% booked, otherwise
+ * "available".
  */
 function computeDateStatus(dateStr) {
   const totalUnits = availableTimes.length * 2;
   let occupiedUnits = 0;
-  // Occupy units from preBookedTimes
-  preBookedTimes.forEach((b) => {
-    if (b.date === dateStr) {
-      occupiedUnits += laneUnits(b.lane);
-    }
+
+  availableTimes.forEach((time) => {
+    let timeUnits = 0;
+    preBookedTimes.forEach((b) => {
+      if (b.date === dateStr && b.time === time) {
+        timeUnits += laneUnits(b.lane);
+      }
+    });
+    monthBookings.forEach((b) => {
+      if (b.date === dateStr && b.time === time) {
+        timeUnits += laneUnits(b.lane);
+      }
+    });
+    selectedSlots.forEach((b) => {
+      if (b.date === dateStr && b.time === time) {
+        timeUnits += laneUnits(b.lane);
+      }
+    });
+    occupiedUnits += Math.min(timeUnits, 2);
   });
-  // Occupy units from month bookings
-  monthBookings.forEach((b) => {
-    if (b.date === dateStr) {
-      occupiedUnits += laneUnits(b.lane);
-    }
-  });
-  // Occupy units from current selection
-  selectedSlots.forEach((b) => {
-    if (b.date === dateStr) {
-      occupiedUnits += laneUnits(b.lane);
-    }
-  });
+
   if (occupiedUnits >= totalUnits) return 'full';
   if (occupiedUnits >= totalUnits / 2) return 'half';
   return 'available';
