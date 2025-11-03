@@ -826,6 +826,35 @@ if (confirmationBackBtn) {
   renderMonthCalendar();
 })();
 
+// Hent og oppdater kalenderen periodisk (uten innlogging)
+const POLL_INTERVAL_MS = 30000; // 30 sekunder
+let pollTimer = null;
+
+function startCalendarPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    try {
+      await loadMonthBookings(currentYear, currentMonth);
+      renderMonthCalendar();
+      renderDayView();
+      renderWeekView();
+    } catch (e) {
+      console.debug('Polling-feil (ignoreres):', e?.message || e);
+    }
+  }, POLL_INTERVAL_MS);
+}
+
+startCalendarPolling();
+
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible') {
+    await loadMonthBookings(currentYear, currentMonth);
+    renderMonthCalendar();
+    renderDayView();
+    renderWeekView();
+  }
+});
+
 // Set current year in footer
 const yearSpan = document.getElementById('year');
 if (yearSpan) {
