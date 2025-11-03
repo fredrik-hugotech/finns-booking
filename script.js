@@ -87,6 +87,13 @@ const confirmationScreen = document.getElementById('confirmationScreen');
 const confirmationSlotsList = document.getElementById('confirmationSlots');
 const confirmationTotal = document.getElementById('confirmationTotal');
 const confirmationBackBtn = document.getElementById('confirmationBack');
+const bookingDateFilter = document.getElementById('bookingDateFilter');
+const bookingTimeFilter = document.getElementById('bookingTimeFilter');
+const bookingResultsContainer = document.getElementById('bookingResults');
+
+function getNamedBookings() {
+  return monthBookings.filter((booking) => booking && booking.name && String(booking.name).trim() !== '');
+}
 
 /**
  * Load all bookings for the given month (inclusive).
@@ -95,6 +102,7 @@ const confirmationBackBtn = document.getElementById('confirmationBack');
 async function loadMonthBookings(year, month) {
   if (!supabaseClient) {
     monthBookings = [];
+    refreshBookingFilters();
     return;
   }
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -109,11 +117,13 @@ async function loadMonthBookings(year, month) {
   if (error) {
     console.error('Error loading month bookings:', error);
     monthBookings = [];
+    refreshBookingFilters();
   } else {
     monthBookings = (data || []).map((booking) => ({
       ...booking,
       lane: normalizeLane(booking.lane)
     }));
+    refreshBookingFilters();
   }
 }
 
@@ -241,6 +251,144 @@ function formatDateLabel(dateStr) {
     day: 'numeric',
     month: 'long'
   });
+}
+
+function updateBookingTimeOptions(selectedDate, previousTime = '', namedBookings = getNamedBookings()) {
+  if (!bookingTimeFilter) {
+    return;
+  }
+  bookingTimeFilter.innerHTML = '';
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'Alle tider';
+  bookingTimeFilter.appendChild(defaultOption);
+
+  if (!selectedDate) {
+    bookingTimeFilter.disabled = true;
+    bookingTimeFilter.value = '';
+    return;
+  }
+
+  const times = Array.from(
+    new Set(
+      namedBookings
+        .filter((booking) => booking.date === selectedDate)
+        .map((booking) => booking.time)
+    )
+  ).sort();
+
+  if (times.length === 0) {
+    bookingTimeFilter.disabled = true;
+    bookingTimeFilter.value = '';
+    return;
+  }
+
+  bookingTimeFilter.disabled = false;
+  times.forEach((time) => {
+    const option = document.createElement('option');
+    option.value = time;
+    option.textContent = time;
+    bookingTimeFilter.appendChild(option);
+  });
+  bookingTimeFilter.value = times.includes(previousTime) ? previousTime : '';
+}
+
+function renderBookingResults(namedBookings = getNamedBookings()) {
+  if (!bookingResultsContainer) {
+    return;
+  }
+  const selectedDate = bookingDateFilter ? bookingDateFilter.value : '';
+  const selectedTime = bookingTimeFilter ? bookingTimeFilter.value : '';
+  let filtered = namedBookings;
+
+  if (selectedDate) {
+    filtered = filtered.filter((booking) => booking.date === selectedDate);
+  }
+  if (selectedTime) {
+    filtered = filtered.filter((booking) => booking.time === selectedTime);
+  }
+
+  if (filtered.length === 0) {
+    bookingResultsContainer.innerHTML =
+      '<p class="booking-empty">Ingen bookinger matcher filteret.</p>';
+    return;
+  }
+
+  const sorted = filtered.slice().sort((a, b) => {
+    if (a.date === b.date) {
+      return a.time.localeCompare(b.time);
+    }
+    return a.date.localeCompare(b.date);
+  });
+
+  const list = document.createElement('ul');
+  list.classList.add('booking-results-list');
+  sorted.forEach((booking) => {
+    const li = document.createElement('li');
+    li.classList.add('booking-result');
+
+    const nameEl = document.createElement('span');
+    nameEl.classList.add('booking-result-name');
+    nameEl.textContent = booking.name;
+
+    const metaEl = document.createElement('span');
+    metaEl.classList.add('booking-result-meta');
+    const laneType = normalizeLane(booking.lane);
+    const laneLabel = laneType === 'full' ? 'Full bane' : 'Halv bane';
+    metaEl.textContent = `${formatDateLabel(booking.date)} kl ${booking.time} · ${laneLabel}`;
+
+    li.appendChild(nameEl);
+    li.appendChild(metaEl);
+    list.appendChild(li);
+  });
+
+  bookingResultsContainer.innerHTML = '';
+  bookingResultsContainer.appendChild(list);
+}
+
+function refreshBookingFilters() {
+  if (!bookingDateFilter || !bookingResultsContainer) {
+    return;
+  }
+
+  const namedBookings = getNamedBookings();
+  const previousDate = bookingDateFilter.value;
+  const previousTime = bookingTimeFilter ? bookingTimeFilter.value : '';
+
+  bookingDateFilter.innerHTML = '';
+  const defaultDateOption = document.createElement('option');
+  defaultDateOption.value = '';
+  defaultDateOption.textContent = 'Alle datoer';
+  bookingDateFilter.appendChild(defaultDateOption);
+
+  if (namedBookings.length === 0) {
+    bookingDateFilter.disabled = true;
+    if (bookingTimeFilter) {
+      bookingTimeFilter.innerHTML = '';
+      const defaultTimeOption = document.createElement('option');
+      defaultTimeOption.value = '';
+      defaultTimeOption.textContent = 'Alle tider';
+      bookingTimeFilter.appendChild(defaultTimeOption);
+      bookingTimeFilter.disabled = true;
+    }
+    bookingResultsContainer.innerHTML =
+      '<p class="booking-empty">Ingen registrerte bookinger denne måneden.</p>';
+    return;
+  }
+
+  bookingDateFilter.disabled = false;
+  const uniqueDates = Array.from(new Set(namedBookings.map((booking) => booking.date))).sort();
+  uniqueDates.forEach((date) => {
+    const option = document.createElement('option');
+    option.value = date;
+    option.textContent = formatDateLabel(date);
+    bookingDateFilter.appendChild(option);
+  });
+
+  const nextDate = uniqueDates.includes(previousDate) ? previousDate : '';
+  bookingDateFilter.value = nextDate;
+  updateBookingTimeOptions(nextDate, previousTime, namedBookings);
+  renderBookingResults(namedBookings);
 }
 
 function loadTimesForDate(dateStr) {
@@ -436,8 +584,19 @@ async function submitBooking() {
   } else {
     // If Supabase isn't configured, just add to monthBookings in memory
     selectedSlots.forEach((slot) => {
-      monthBookings.push({ date: slot.date, time: slot.time, lane: normalizeLane(slot.lane) });
+      monthBookings.push({
+        date: slot.date,
+        time: slot.time,
+        lane: normalizeLane(slot.lane),
+        name,
+        phone,
+        email,
+        club,
+        gender,
+        age
+      });
     });
+    refreshBookingFilters();
   }
   const confirmedSlots = selectedSlots.map((slot) => ({ ...slot }));
   // Clear selection and form
@@ -521,6 +680,21 @@ if (confirmationBackBtn) {
     document.body.classList.remove('has-overlay');
     confirmationSlotsList.innerHTML = '';
     confirmationTotal.textContent = '';
+  });
+}
+
+if (bookingDateFilter) {
+  bookingDateFilter.addEventListener('change', () => {
+    const namedBookings = getNamedBookings();
+    const currentTimeValue = bookingTimeFilter ? bookingTimeFilter.value : '';
+    updateBookingTimeOptions(bookingDateFilter.value, currentTimeValue, namedBookings);
+    renderBookingResults(namedBookings);
+  });
+}
+
+if (bookingTimeFilter) {
+  bookingTimeFilter.addEventListener('change', () => {
+    renderBookingResults();
   });
 }
 

@@ -518,6 +518,91 @@ main {
   box-shadow: 0 12px 24px rgba(0, 56, 44, 0.12);
 }
 
+.booking-help-text {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.booking-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.booking-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.booking-filter label {
+  font-weight: 600;
+  color: var(--green-900);
+}
+
+.booking-filter select {
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(0, 56, 44, 0.18);
+  font-size: 1rem;
+  font-family: var(--font-family);
+  background: var(--white);
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.booking-filter select:focus {
+  outline: none;
+  border-color: var(--green-600);
+  box-shadow: 0 0 0 3px rgba(0, 121, 92, 0.2);
+}
+
+.booking-filter select:disabled {
+  background: #f3f5f4;
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.booking-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.booking-results-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.booking-result {
+  background: rgba(0, 121, 92, 0.06);
+  border-radius: var(--radius-sm);
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.booking-result-name {
+  font-weight: 700;
+  color: var(--green-900);
+}
+
+.booking-result-meta {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.booking-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .confirmation-payment {
   margin-top: 1.5rem;
   text-align: center;

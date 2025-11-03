@@ -105,6 +105,28 @@
                 </p>
               </div>
             </section>
+
+            <section id="bookedTimesSection" class="card">
+              <h2>Bookede tider</h2>
+              <p class="booking-help-text">Filtrer for å se hvem som har reservert banene.</p>
+              <div class="booking-filter-grid">
+                <div class="booking-filter">
+                  <label for="bookingDateFilter">Dato</label>
+                  <select id="bookingDateFilter" aria-label="Filtrer bookinger etter dato">
+                    <option value="">Alle datoer</option>
+                  </select>
+                </div>
+                <div class="booking-filter">
+                  <label for="bookingTimeFilter">Tidspunkt</label>
+                  <select id="bookingTimeFilter" aria-label="Filtrer bookinger etter tidspunkt" disabled>
+                    <option value="">Alle tider</option>
+                  </select>
+                </div>
+              </div>
+              <div id="bookingResults" class="booking-results" aria-live="polite">
+                <p class="booking-empty">Ingen registrerte bookinger denne måneden.</p>
+              </div>
+            </section>
           </div>
         </section>
 
