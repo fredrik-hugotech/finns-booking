@@ -36,6 +36,18 @@ const availableTimes = [
   '20:00'
 ];
 
+function formatTimeInterval(startTime) {
+  if (!startTime) return '';
+  const [hourStr, minuteStr] = startTime.split(':');
+  const hour = Number(hourStr);
+  const minute = Number(minuteStr);
+  const endTotalMinutes = hour * 60 + minute + 60;
+  const endHour = Math.floor(endTotalMinutes / 60) % 24;
+  const endMinute = endTotalMinutes % 60;
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${pad(hour)}:${pad(minute)}-${pad(endHour)}:${pad(endMinute)}`;
+}
+
 // List any pre‑booked times here.  Each entry must include a date
 // string (YYYY‑MM‑DD), a time (HH:MM) and a lane type.  Lane
 // conflicts are resolved by blocking both halves of a full booking.
@@ -317,13 +329,17 @@ function loadTimesForDate(dateStr) {
     if (avail > 0) {
       hasAvailable = true;
     }
+    if (avail <= 0 && !showBookedDetails) {
+      return;
+    }
+
     const row = document.createElement('div');
     row.classList.add('time-row');
     if (avail <= 0) {
       row.classList.add('time-row-unavailable');
     }
     const label = document.createElement('span');
-    label.textContent = time;
+    label.textContent = formatTimeInterval(time);
     row.appendChild(label);
     // Half lane button
     const halfBtn = document.createElement('button');
@@ -418,7 +434,7 @@ function updateSummary() {
     const laneLabel = laneType === 'full' ? 'Full bane' : 'Halv bane';
     const price = laneType === 'full' ? priceFull : priceHalf;
     total += price;
-    li.textContent = `${slot.date} kl ${slot.time} – ${laneLabel} (${price} kr) `;
+    li.textContent = `${slot.date} kl ${formatTimeInterval(slot.time)} – ${laneLabel} (${price} kr) `;
     const removeBtn = document.createElement('button');
     removeBtn.textContent = 'Fjern';
     removeBtn.classList.add('remove-button');
@@ -560,7 +576,7 @@ function showConfirmation(slots) {
       const price = laneType === 'full' ? priceFull : priceHalf;
       total += price;
       const li = document.createElement('li');
-      li.textContent = `${formatDateLabel(slot.date)} kl ${slot.time} – ${lane} (${price} kr)`;
+      li.textContent = `${formatDateLabel(slot.date)} kl ${formatTimeInterval(slot.time)} – ${lane} (${price} kr)`;
       confirmationSlotsList.appendChild(li);
     });
     confirmationTotal.textContent = `Total sum: ${total} kr`;
