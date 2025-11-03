@@ -38,6 +38,7 @@ let selectedSlots = []; // { date, time, lane }
 let monthBookings = []; // bookings loaded for the current month
 let currentYear = new Date().getFullYear();
 let currentMonth = new Date().getMonth();
+let activeDate = null;
 
 // DOM elements for the new UI
 const monthLabel = document.getElementById('monthLabel');
@@ -123,7 +124,14 @@ function renderMonthCalendar() {
     'Januar','Februar','Mars','April','Mai','Juni',
     'Juli','August','September','Oktober','November','Desember'
   ];
+  const dayNames = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
   monthLabel.textContent = `${monthNames[currentMonth]} ${currentYear}`;
+  dayNames.forEach((name) => {
+    const headerCell = document.createElement('div');
+    headerCell.className = 'day-cell day-name';
+    headerCell.textContent = name;
+    monthCalendar.appendChild(headerCell);
+  });
   const firstDay = new Date(currentYear, currentMonth, 1);
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   // Determine Monday-based weekday index (0=Monday)
@@ -134,11 +142,21 @@ function renderMonthCalendar() {
     blank.className = 'day-cell empty';
     monthCalendar.appendChild(blank);
   }
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     const cell = document.createElement('div');
     cell.classList.add('day-cell');
     const status = computeDateStatus(dateStr);
+    const statusLabel =
+      status === 'full' ? 'fullbooket' : status === 'half' ? 'begrenset kapasitet' : 'ledig kapasitet';
+    let ariaLabel = `${day}. ${monthNames[currentMonth]}`;
+    if (dateStr === todayStr) {
+      cell.classList.add('today');
+      ariaLabel = `I dag, ${ariaLabel}`;
+    }
+    cell.setAttribute('aria-label', `${ariaLabel} – ${statusLabel}`);
     if (status === 'full') {
       cell.classList.add('full-day');
     } else if (status === 'half') {
@@ -146,13 +164,28 @@ function renderMonthCalendar() {
     } else {
       cell.classList.add('available-day');
     }
+    if (activeDate === dateStr) {
+      cell.classList.add('active-day');
+    }
     if (selectedSlots.some(s => s.date === dateStr)) {
       cell.classList.add('selected-day');
     }
     cell.textContent = day;
-    cell.addEventListener('click', () => {
-      loadTimesForDate(dateStr);
-    });
+    cell.setAttribute('role', 'button');
+    cell.setAttribute('tabindex', status === 'full' ? '-1' : '0');
+    if (status === 'full') {
+      cell.setAttribute('aria-disabled', 'true');
+    } else {
+      cell.addEventListener('click', () => {
+        loadTimesForDate(dateStr);
+      });
+      cell.addEventListener('keydown', (evt) => {
+        if (evt.key === 'Enter' || evt.key === ' ') {
+          evt.preventDefault();
+          loadTimesForDate(dateStr);
+        }
+      });
+    }
     monthCalendar.appendChild(cell);
   }
 }
@@ -161,10 +194,22 @@ function renderMonthCalendar() {
  * Render available time options for a specific date.
  * For each time, show buttons to select half or full lane, based on availability.
  */
+function formatDateLabel(dateStr) {
+  const [year, month, day] = dateStr.split('-').map((part) => Number(part));
+  const date = new Date(year, month - 1, day);
+  return date.toLocaleDateString('nb-NO', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  });
+}
+
 function loadTimesForDate(dateStr) {
+  activeDate = dateStr;
+  renderMonthCalendar();
   timesList.innerHTML = '';
   const heading = document.createElement('h3');
-  heading.textContent = `Tilgjengelige tider ${dateStr}`;
+  heading.textContent = `Tilgjengelige tider – ${formatDateLabel(dateStr)}`;
   timesList.appendChild(heading);
   let any = false;
   availableTimes.forEach((time) => {
@@ -237,7 +282,6 @@ function addSlot(dateStr, time, lane) {
   // Add slot to selections
   selectedSlots.push({ date: dateStr, time, lane });
   updateSummary();
-  renderMonthCalendar();
   loadTimesForDate(dateStr);
 }
 
@@ -265,7 +309,6 @@ function updateSummary() {
     removeBtn.addEventListener('click', () => {
       selectedSlots.splice(index, 1);
       updateSummary();
-      renderMonthCalendar();
       loadTimesForDate(slot.date);
     });
     li.appendChild(removeBtn);
@@ -356,6 +399,7 @@ async function submitBooking() {
   }
   // Clear selection and form
   selectedSlots = [];
+  activeDate = null;
   updateSummary();
   renderMonthCalendar();
   timesList.innerHTML = '';
@@ -378,6 +422,7 @@ prevMonthBtn.addEventListener('click', async () => {
     currentMonth -= 1;
   }
   await loadMonthBookings(currentYear, currentMonth);
+  activeDate = null;
   renderMonthCalendar();
   timesList.innerHTML = '';
 });
@@ -389,6 +434,7 @@ nextMonthBtn.addEventListener('click', async () => {
     currentMonth += 1;
   }
   await loadMonthBookings(currentYear, currentMonth);
+  activeDate = null;
   renderMonthCalendar();
   timesList.innerHTML = '';
 });
