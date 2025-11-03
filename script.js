@@ -329,7 +329,7 @@ async function submitBooking() {
   if (supabaseClient) {
     const insertData = selectedSlots.map((slot) => ({
       date: slot.date,
-      time: slot.time,
+     time: slot.time,
       lane: slot.lane,
       name,
       phone,
@@ -341,10 +341,12 @@ async function submitBooking() {
   const { error } = await supabaseClient.from('bookings').insert(insertData, { returning: 'minimal' });
     
     
-      console.error('Error inserting bookings:', error);
-      summaryMessageBox.textContent = 'Det oppstod en feil under lagring av bestillingen.';
-      summaryMessageBox.classList.add('error');
-      return;
+if (error) {
+  console.error('Error inserting bookings:', error);
+  summaryMessageBox.textContent = 'Det oppstod en feil under lagring av bestillingen.';
+  summaryMessageBox.classList.add('error');
+  return;
+}
     }
     // Refresh month bookings so the calendar updates
     await loadMonthBookings(currentYear, currentMonth);
