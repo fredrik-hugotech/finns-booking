@@ -87,13 +87,7 @@ const confirmationScreen = document.getElementById('confirmationScreen');
 const confirmationSlotsList = document.getElementById('confirmationSlots');
 const confirmationTotal = document.getElementById('confirmationTotal');
 const confirmationBackBtn = document.getElementById('confirmationBack');
-const bookingDateFilter = document.getElementById('bookingDateFilter');
-const bookingTimeFilter = document.getElementById('bookingTimeFilter');
-const bookingResultsContainer = document.getElementById('bookingResults');
-
-function getNamedBookings() {
-  return monthBookings.filter((booking) => booking && booking.name && String(booking.name).trim() !== '');
-}
+let showBookedDetails = false;
 
 /**
  * Load all bookings for the given month (inclusive).
@@ -102,7 +96,6 @@ function getNamedBookings() {
 async function loadMonthBookings(year, month) {
   if (!supabaseClient) {
     monthBookings = [];
-    refreshBookingFilters();
     return;
   }
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -117,13 +110,11 @@ async function loadMonthBookings(year, month) {
   if (error) {
     console.error('Error loading month bookings:', error);
     monthBookings = [];
-    refreshBookingFilters();
   } else {
     monthBookings = (data || []).map((booking) => ({
       ...booking,
       lane: normalizeLane(booking.lane)
     }));
-    refreshBookingFilters();
   }
 }
 
@@ -253,144 +244,6 @@ function formatDateLabel(dateStr) {
   });
 }
 
-function updateBookingTimeOptions(selectedDate, previousTime = '', namedBookings = getNamedBookings()) {
-  if (!bookingTimeFilter) {
-    return;
-  }
-  bookingTimeFilter.innerHTML = '';
-  const defaultOption = document.createElement('option');
-  defaultOption.value = '';
-  defaultOption.textContent = 'Alle tider';
-  bookingTimeFilter.appendChild(defaultOption);
-
-  if (!selectedDate) {
-    bookingTimeFilter.disabled = true;
-    bookingTimeFilter.value = '';
-    return;
-  }
-
-  const times = Array.from(
-    new Set(
-      namedBookings
-        .filter((booking) => booking.date === selectedDate)
-        .map((booking) => booking.time)
-    )
-  ).sort();
-
-  if (times.length === 0) {
-    bookingTimeFilter.disabled = true;
-    bookingTimeFilter.value = '';
-    return;
-  }
-
-  bookingTimeFilter.disabled = false;
-  times.forEach((time) => {
-    const option = document.createElement('option');
-    option.value = time;
-    option.textContent = time;
-    bookingTimeFilter.appendChild(option);
-  });
-  bookingTimeFilter.value = times.includes(previousTime) ? previousTime : '';
-}
-
-function renderBookingResults(namedBookings = getNamedBookings()) {
-  if (!bookingResultsContainer) {
-    return;
-  }
-  const selectedDate = bookingDateFilter ? bookingDateFilter.value : '';
-  const selectedTime = bookingTimeFilter ? bookingTimeFilter.value : '';
-  let filtered = namedBookings;
-
-  if (selectedDate) {
-    filtered = filtered.filter((booking) => booking.date === selectedDate);
-  }
-  if (selectedTime) {
-    filtered = filtered.filter((booking) => booking.time === selectedTime);
-  }
-
-  if (filtered.length === 0) {
-    bookingResultsContainer.innerHTML =
-      '<p class="booking-empty">Ingen bookinger matcher filteret.</p>';
-    return;
-  }
-
-  const sorted = filtered.slice().sort((a, b) => {
-    if (a.date === b.date) {
-      return a.time.localeCompare(b.time);
-    }
-    return a.date.localeCompare(b.date);
-  });
-
-  const list = document.createElement('ul');
-  list.classList.add('booking-results-list');
-  sorted.forEach((booking) => {
-    const li = document.createElement('li');
-    li.classList.add('booking-result');
-
-    const nameEl = document.createElement('span');
-    nameEl.classList.add('booking-result-name');
-    nameEl.textContent = booking.name;
-
-    const metaEl = document.createElement('span');
-    metaEl.classList.add('booking-result-meta');
-    const laneType = normalizeLane(booking.lane);
-    const laneLabel = laneType === 'full' ? 'Full bane' : 'Halv bane';
-    metaEl.textContent = `${formatDateLabel(booking.date)} kl ${booking.time} · ${laneLabel}`;
-
-    li.appendChild(nameEl);
-    li.appendChild(metaEl);
-    list.appendChild(li);
-  });
-
-  bookingResultsContainer.innerHTML = '';
-  bookingResultsContainer.appendChild(list);
-}
-
-function refreshBookingFilters() {
-  if (!bookingDateFilter || !bookingResultsContainer) {
-    return;
-  }
-
-  const namedBookings = getNamedBookings();
-  const previousDate = bookingDateFilter.value;
-  const previousTime = bookingTimeFilter ? bookingTimeFilter.value : '';
-
-  bookingDateFilter.innerHTML = '';
-  const defaultDateOption = document.createElement('option');
-  defaultDateOption.value = '';
-  defaultDateOption.textContent = 'Alle datoer';
-  bookingDateFilter.appendChild(defaultDateOption);
-
-  if (namedBookings.length === 0) {
-    bookingDateFilter.disabled = true;
-    if (bookingTimeFilter) {
-      bookingTimeFilter.innerHTML = '';
-      const defaultTimeOption = document.createElement('option');
-      defaultTimeOption.value = '';
-      defaultTimeOption.textContent = 'Alle tider';
-      bookingTimeFilter.appendChild(defaultTimeOption);
-      bookingTimeFilter.disabled = true;
-    }
-    bookingResultsContainer.innerHTML =
-      '<p class="booking-empty">Ingen registrerte bookinger denne måneden.</p>';
-    return;
-  }
-
-  bookingDateFilter.disabled = false;
-  const uniqueDates = Array.from(new Set(namedBookings.map((booking) => booking.date))).sort();
-  uniqueDates.forEach((date) => {
-    const option = document.createElement('option');
-    option.value = date;
-    option.textContent = formatDateLabel(date);
-    bookingDateFilter.appendChild(option);
-  });
-
-  const nextDate = uniqueDates.includes(previousDate) ? previousDate : '';
-  bookingDateFilter.value = nextDate;
-  updateBookingTimeOptions(nextDate, previousTime, namedBookings);
-  renderBookingResults(namedBookings);
-}
-
 function loadTimesForDate(dateStr) {
   activeDate = dateStr;
   renderMonthCalendar();
@@ -398,7 +251,50 @@ function loadTimesForDate(dateStr) {
   const heading = document.createElement('h3');
   heading.textContent = `Tilgjengelige tider – ${formatDateLabel(dateStr)}`;
   timesList.appendChild(heading);
-  let any = false;
+
+  const namedBookings = monthBookings
+    .filter((booking) => {
+      if (booking.date !== dateStr) {
+        return false;
+      }
+      const nameText = String(booking.name ?? '').trim();
+      return nameText !== '';
+    })
+    .map((booking) => ({
+      ...booking,
+      lane: normalizeLane(booking.lane),
+      name: String(booking.name ?? '').trim()
+    }));
+
+  if (namedBookings.length === 0) {
+    showBookedDetails = false;
+  }
+
+  if (namedBookings.length > 0) {
+    const toggleWrapper = document.createElement('div');
+    toggleWrapper.classList.add('bookings-toggle');
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.classList.add('booking-toggle-button');
+    toggleBtn.textContent = showBookedDetails ? 'Skjul bookede tider' : 'Vis bookede tider';
+    toggleBtn.setAttribute('aria-pressed', showBookedDetails ? 'true' : 'false');
+    toggleBtn.addEventListener('click', () => {
+      showBookedDetails = !showBookedDetails;
+      loadTimesForDate(dateStr);
+    });
+    toggleWrapper.appendChild(toggleBtn);
+    timesList.appendChild(toggleWrapper);
+  }
+
+  const bookingsByTime = namedBookings.reduce((acc, booking) => {
+    if (!acc[booking.time]) {
+      acc[booking.time] = [];
+    }
+    acc[booking.time].push(booking);
+    return acc;
+  }, {});
+
+  let hasAvailable = false;
   availableTimes.forEach((time) => {
     // Determine occupied units for this time
     let occupied = 0;
@@ -418,13 +314,14 @@ function loadTimesForDate(dateStr) {
       }
     });
     const avail = 2 - occupied;
-    if (avail <= 0) {
-      // Fully booked; do not show options
-      return;
+    if (avail > 0) {
+      hasAvailable = true;
     }
-    any = true;
     const row = document.createElement('div');
     row.classList.add('time-row');
+    if (avail <= 0) {
+      row.classList.add('time-row-unavailable');
+    }
     const label = document.createElement('span');
     label.textContent = time;
     row.appendChild(label);
@@ -438,6 +335,7 @@ function loadTimesForDate(dateStr) {
       });
     } else {
       halfBtn.disabled = true;
+      halfBtn.setAttribute('aria-disabled', 'true');
     }
     // full lane button
     const fullBtn = document.createElement('button');
@@ -449,12 +347,40 @@ function loadTimesForDate(dateStr) {
       });
     } else {
       fullBtn.disabled = true;
+      fullBtn.setAttribute('aria-disabled', 'true');
+    }
+
+    if (avail <= 0) {
+      halfBtn.classList.add('disabled');
+      fullBtn.classList.add('disabled');
     }
     row.appendChild(halfBtn);
     row.appendChild(fullBtn);
+
+    const bookingsForTime = (bookingsByTime[time] || [])
+      .slice()
+      .sort((a, b) => {
+        const laneDiff = laneUnits(b.lane) - laneUnits(a.lane);
+        if (laneDiff !== 0) {
+          return laneDiff;
+        }
+        return a.name.localeCompare(b.name);
+      });
+    if (showBookedDetails && bookingsForTime.length > 0) {
+      const bookedList = document.createElement('ul');
+      bookedList.classList.add('time-bookings');
+      bookingsForTime.forEach((booking) => {
+        const item = document.createElement('li');
+        item.classList.add('time-booking-item');
+        const laneLabel = booking.lane === 'full' ? 'Full bane' : 'Halv bane';
+        item.textContent = `${laneLabel}: ${booking.name}`;
+        bookedList.appendChild(item);
+      });
+      row.appendChild(bookedList);
+    }
     timesList.appendChild(row);
   });
-  if (!any) {
+  if (!hasAvailable) {
     const p = document.createElement('p');
     p.textContent = 'Ingen ledige tider denne dagen.';
     timesList.appendChild(p);
@@ -596,12 +522,12 @@ async function submitBooking() {
         age
       });
     });
-    refreshBookingFilters();
   }
   const confirmedSlots = selectedSlots.map((slot) => ({ ...slot }));
   // Clear selection and form
   selectedSlots = [];
   activeDate = null;
+  showBookedDetails = false;
   updateSummary();
   renderMonthCalendar();
   timesList.innerHTML = '';
@@ -656,6 +582,7 @@ prevMonthBtn.addEventListener('click', async () => {
   }
   await loadMonthBookings(currentYear, currentMonth);
   activeDate = null;
+  showBookedDetails = false;
   renderMonthCalendar();
   timesList.innerHTML = '';
 });
@@ -668,6 +595,7 @@ nextMonthBtn.addEventListener('click', async () => {
   }
   await loadMonthBookings(currentYear, currentMonth);
   activeDate = null;
+  showBookedDetails = false;
   renderMonthCalendar();
   timesList.innerHTML = '';
 });
@@ -680,21 +608,6 @@ if (confirmationBackBtn) {
     document.body.classList.remove('has-overlay');
     confirmationSlotsList.innerHTML = '';
     confirmationTotal.textContent = '';
-  });
-}
-
-if (bookingDateFilter) {
-  bookingDateFilter.addEventListener('change', () => {
-    const namedBookings = getNamedBookings();
-    const currentTimeValue = bookingTimeFilter ? bookingTimeFilter.value : '';
-    updateBookingTimeOptions(bookingDateFilter.value, currentTimeValue, namedBookings);
-    renderBookingResults(namedBookings);
-  });
-}
-
-if (bookingTimeFilter) {
-  bookingTimeFilter.addEventListener('change', () => {
-    renderBookingResults();
   });
 }
 
