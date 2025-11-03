@@ -338,16 +338,14 @@ async function submitBooking() {
       gender,
       age
     }));
-  const { error } = await supabaseClient.from('bookings').insert(insertData, { returning: 'minimal' });
-    
-    
-if (error) {
-  console.error('Error inserting bookings:', error);
-  summaryMessageBox.textContent = 'Det oppstod en feil under lagring av bestillingen.';
-  summaryMessageBox.classList.add('error');
-  return;
-}
+      const { error } = await supabaseClient.from('bookings').insert(insertData, { returning: 'minimal' });
+    if (error) {
+      console.error('Error inserting bookings:', error);
+      summaryMessageBox.textContent = 'Det oppstod en feil under lagring av bestillingen.';
+      summaryMessageBox.classList.add('error');
+      return;
     }
+
     // Refresh month bookings so the calendar updates
     await loadMonthBookings(currentYear, currentMonth);
   } else {
