@@ -338,8 +338,9 @@ async function submitBooking() {
       gender,
       age
     }));
-    const { error } = await supabaseClient.from('bookings').insert(insertData);
-    if (error) {
+  const { error } = await supabaseClient.from('bookings').insert(insertData, { returning: 'minimal' });
+    
+    
       console.error('Error inserting bookings:', error);
       summaryMessageBox.textContent = 'Det oppstod en feil under lagring av bestillingen.';
       summaryMessageBox.classList.add('error');
