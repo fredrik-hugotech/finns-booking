@@ -517,6 +517,10 @@ main {
   box-shadow: 0 12px 24px rgba(0, 56, 44, 0.12);
 }
 
+.confirmation-screen[hidden] {
+  display: none !important;
+}
+
 .confirmation-screen {
   position: fixed;
   inset: 0;
