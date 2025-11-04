@@ -104,6 +104,16 @@ function laneUnits(lane) {
   return normalizeLane(lane) === 'full' ? 2 : 1;
 }
 
+function formatGenderLabel(value) {
+  if (!value) return '';
+  const normalized = String(value).trim();
+  if (!normalized) return '';
+  const lower = normalized.toLowerCase();
+  if (lower === 'mann') return 'Mann';
+  if (lower === 'kvinne') return 'Kvinne';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 // Booking application state
 const priceFull = 1990;
 const priceHalf = 1490;
@@ -240,11 +250,12 @@ function generateCalendarFeed(bookings) {
     const start = formatICSDateTimeLocal(booking.date, booking.time);
     const end = formatICSDateTimeLocal(booking.date, addHourToTime(booking.time));
     const summary = `${laneLabel} – ${booking.name || 'Ukjent'}`;
+    const genderLabel = formatGenderLabel(booking.gender);
     const detailsList = [
       booking.name ? `Navn: ${booking.name}` : null,
       booking.email ? `E-post: ${booking.email}` : null,
       booking.phone ? `Telefon: ${booking.phone}` : null,
-      booking.gender ? `Kjønn: ${booking.gender}` : null,
+      genderLabel ? `Kjønn: ${genderLabel}` : null,
       booking.age ? `Årskull: ${booking.age}` : null,
       booking.club ? `Klubb: ${booking.club}` : null
     ]
@@ -506,6 +517,42 @@ function formatDateLabel(dateStr) {
   });
 }
 
+function createBookingMetaElement(entries) {
+  if (!entries || entries.length === 0) {
+    return null;
+  }
+  const container = document.createElement('div');
+  container.classList.add('booking-meta');
+  entries.forEach((entry) => {
+    if (!entry) {
+      return;
+    }
+    const value = String(entry.value ?? '').trim();
+    if (!value) {
+      return;
+    }
+    const pill = document.createElement('span');
+    pill.classList.add('booking-pill');
+    if (Array.isArray(entry.classes)) {
+      entry.classes.forEach((cls) => pill.classList.add(cls));
+    }
+    if (entry.data && typeof entry.data === 'object') {
+      Object.entries(entry.data).forEach(([key, dataValue]) => {
+        if (dataValue != null) {
+          pill.dataset[key] = dataValue;
+        }
+      });
+    }
+    const label = entry.label ? `${entry.label}: ` : '';
+    pill.textContent = `${label}${value}`;
+    container.appendChild(pill);
+  });
+  if (!container.childNodes.length) {
+    return null;
+  }
+  return container;
+}
+
 function loadTimesForDate(dateStr) {
   activeDate = dateStr;
   renderMonthCalendar();
@@ -521,7 +568,10 @@ function loadTimesForDate(dateStr) {
       lane: normalizeLane(booking.lane),
       name: String(booking.name ?? '').trim(),
       email: String(booking.email ?? '').trim(),
-      phone: String(booking.phone ?? '').trim()
+      phone: String(booking.phone ?? '').trim(),
+      club: String(booking.club ?? '').trim(),
+      gender: String(booking.gender ?? '').trim(),
+      age: String(booking.age ?? '').trim()
     }));
 
   const bookingsByTime = bookingsForDate.reduce((acc, booking) => {
@@ -599,29 +649,53 @@ function loadTimesForDate(dateStr) {
         item.classList.add('time-booking-item');
         const laneLabel = booking.lane === 'full' ? 'Full bane' : 'Halv bane';
         const nameText = booking.name || 'Ukjent navn';
-        const contactParts = [];
-        if (booking.email) contactParts.push(booking.email);
-        if (booking.phone) contactParts.push(booking.phone);
+
+        const header = document.createElement('div');
+        header.classList.add('booking-main');
 
         const laneSpan = document.createElement('span');
-        laneSpan.classList.add('booking-lane');
+        laneSpan.classList.add('booking-lane', 'booking-pill');
         laneSpan.textContent = laneLabel;
 
         const nameSpan = document.createElement('span');
         nameSpan.classList.add('booking-name');
         nameSpan.textContent = nameText;
 
-        item.appendChild(laneSpan);
-        item.appendChild(document.createTextNode(': '));
-        item.appendChild(nameSpan);
+        header.appendChild(laneSpan);
+        header.appendChild(nameSpan);
+        item.appendChild(header);
 
-        if (contactParts.length > 0) {
-          const contactSpan = document.createElement('span');
-          contactSpan.classList.add('booking-contact');
-          contactSpan.textContent = contactParts.join(' · ');
-          item.appendChild(document.createTextNode(' – '));
-          item.appendChild(contactSpan);
+        const metaEntries = [];
+        if (booking.club) {
+          metaEntries.push({ label: 'Klubb', value: booking.club });
         }
+        if (booking.gender) {
+          metaEntries.push({ label: 'Kjønn', value: formatGenderLabel(booking.gender) });
+        }
+        if (booking.age) {
+          metaEntries.push({ label: 'Årskull', value: booking.age });
+        }
+        if (booking.email) {
+          metaEntries.push({
+            label: 'E-post',
+            value: booking.email,
+            classes: ['booking-contact'],
+            data: { type: 'E-post' }
+          });
+        }
+        if (booking.phone) {
+          metaEntries.push({
+            label: 'Telefon',
+            value: booking.phone,
+            classes: ['booking-contact'],
+            data: { type: 'Telefon' }
+          });
+        }
+        const meta = createBookingMetaElement(metaEntries);
+        if (meta) {
+          item.appendChild(meta);
+        }
+
         bookedList.appendChild(item);
       });
       row.appendChild(bookedList);
@@ -733,7 +807,10 @@ function loadAdminTimesForDate(dateStr) {
       lane: normalizeLane(booking.lane),
       name: String(booking.name ?? '').trim(),
       email: String(booking.email ?? '').trim(),
-      phone: String(booking.phone ?? '').trim()
+      phone: String(booking.phone ?? '').trim(),
+      club: String(booking.club ?? '').trim(),
+      gender: String(booking.gender ?? '').trim(),
+      age: String(booking.age ?? '').trim()
     }));
 
   const bookingsByTime = bookingsForDate.reduce((acc, booking) => {
@@ -799,31 +876,55 @@ function loadAdminTimesForDate(dateStr) {
         item.classList.add('time-booking-item');
         const laneLabel = entry.lane === 'full' ? 'Full bane' : 'Halv bane';
         const nameText = entry.name || 'Ukjent navn';
+        const header = document.createElement('div');
+        header.classList.add('booking-main');
+
         const laneSpan = document.createElement('span');
-        laneSpan.classList.add('booking-lane');
+        laneSpan.classList.add('booking-lane', 'booking-pill');
         laneSpan.textContent = laneLabel;
+
         const nameSpan = document.createElement('span');
         nameSpan.classList.add('booking-name');
         nameSpan.textContent = nameText;
-        item.appendChild(laneSpan);
-        item.appendChild(document.createTextNode(': '));
-        item.appendChild(nameSpan);
 
-        const contactParts = [];
-        if (entry.email) contactParts.push(entry.email);
-        if (entry.phone) contactParts.push(entry.phone);
-        if (contactParts.length > 0) {
-          const contactSpan = document.createElement('span');
-          contactSpan.classList.add('booking-contact');
-          contactSpan.textContent = contactParts.join(' · ');
-          item.appendChild(document.createTextNode(' – '));
-          item.appendChild(contactSpan);
+        header.appendChild(laneSpan);
+        header.appendChild(nameSpan);
+        item.appendChild(header);
+
+        const metaEntries = [];
+        if (entry.club) {
+          metaEntries.push({ label: 'Klubb', value: entry.club });
+        }
+        if (entry.gender) {
+          metaEntries.push({ label: 'Kjønn', value: formatGenderLabel(entry.gender) });
+        }
+        if (entry.age) {
+          metaEntries.push({ label: 'Årskull', value: entry.age });
+        }
+        if (entry.email) {
+          metaEntries.push({
+            label: 'E-post',
+            value: entry.email,
+            classes: ['booking-contact'],
+            data: { type: 'E-post' }
+          });
+        }
+        if (entry.phone) {
+          metaEntries.push({
+            label: 'Telefon',
+            value: entry.phone,
+            classes: ['booking-contact'],
+            data: { type: 'Telefon' }
+          });
+        }
+        const meta = createBookingMetaElement(metaEntries);
+        if (meta) {
+          item.appendChild(meta);
         }
         if (entry.type === 'prebooked' && entry.note) {
-          const noteSpan = document.createElement('span');
+          const noteSpan = document.createElement('p');
           noteSpan.classList.add('booking-note');
           noteSpan.textContent = entry.note;
-          item.appendChild(document.createTextNode(' – '));
           item.appendChild(noteSpan);
         }
         list.appendChild(item);

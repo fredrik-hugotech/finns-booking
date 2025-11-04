@@ -402,6 +402,7 @@ body.auth-locked {
 .booking-note {
   color: var(--text-muted);
   font-size: 0.95rem;
+  margin: 0;
 }
 
 .time-booking-item + .booking-note {
@@ -715,18 +716,65 @@ main {
   font-size: 0.88rem;
   color: var(--text-muted);
   display: flex;
-  align-items: center;
-  gap: 0.3rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
 }
 
-.booking-lane {
-  font-weight: 700;
-  color: var(--green-800);
+.booking-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  color: var(--text-dark);
 }
 
 .booking-name {
   font-weight: 600;
   color: var(--text-dark);
+}
+
+.booking-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.booking-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: rgba(0, 121, 92, 0.12);
+  color: var(--green-900);
+}
+
+.booking-lane {
+  font-weight: 700;
+}
+
+.booking-pill.booking-contact {
+  background: rgba(0, 56, 44, 0.08);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.booking-pill.booking-contact::before {
+  content: '\2709';
+  font-size: 0.72rem;
+  color: inherit;
+  display: none;
+}
+
+.booking-pill.booking-contact[data-type='Telefon']::before {
+  content: '\260E';
+}
+
+.booking-pill.booking-contact[data-type]::before {
+  display: inline;
 }
 
 .booking-contact {
