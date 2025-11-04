@@ -120,6 +120,31 @@ function phonesMatch(a, b) {
   return digitsA.endsWith(digitsB) || digitsB.endsWith(digitsA);
 }
 
+function buildBookingIdentityFilter(booking) {
+  if (!booking) {
+    return null;
+  }
+  const filter = {};
+  const addIfPresent = (key, value, normaliser = (val) => val) => {
+    if (value == null) {
+      return;
+    }
+    const normalised = normaliser(value);
+    if (normalised) {
+      filter[key] = normalised;
+    }
+  };
+
+  addIfPresent('date', booking.date, (val) => String(val).trim());
+  addIfPresent('time', booking.time, (val) => String(val).trim());
+  addIfPresent('lane', booking.lane, (val) => normalizeLane(val));
+  addIfPresent('name', booking.name, (val) => String(val).trim());
+  addIfPresent('email', booking.email, (val) => String(val).trim());
+  addIfPresent('phone', booking.phone, (val) => normalisePhone(val));
+
+  return Object.keys(filter).length ? filter : null;
+}
+
 function getBookingDateTime(booking) {
   if (!booking || !booking.date) return null;
   const [yearStr, monthStr, dayStr] = booking.date.split('-');
@@ -1387,9 +1412,35 @@ async function markBookingAsUnused(booking) {
 
   try {
     if (supabaseClient) {
-      const { error } = await supabaseClient.from('bookings').delete().eq('id', booking.id);
-      if (error) {
-        throw error;
+      let deleteResult = { data: null };
+      if (booking.id != null) {
+        deleteResult = await supabaseClient
+          .from('bookings')
+          .delete()
+          .eq('id', booking.id)
+          .select('id');
+        if (deleteResult.error) {
+          throw deleteResult.error;
+        }
+      }
+
+      if (!deleteResult.data || deleteResult.data.length === 0) {
+        const identityFilter = buildBookingIdentityFilter(booking);
+        if (!identityFilter || !identityFilter.date || !identityFilter.time) {
+          throw new Error('Fant ingen tilhørende booking å slette.');
+        }
+        let fallbackQuery = supabaseClient.from('bookings').delete();
+        Object.entries(identityFilter).forEach(([key, value]) => {
+          fallbackQuery = fallbackQuery.eq(key, value);
+        });
+        const fallbackResult = await fallbackQuery.select('id');
+        if (fallbackResult.error) {
+          throw fallbackResult.error;
+        }
+        if (!fallbackResult.data || fallbackResult.data.length === 0) {
+          throw new Error('Fant ingen tilhørende booking å slette.');
+        }
+        deleteResult = fallbackResult;
       }
       await refreshCalendarFeed();
       await loadMonthBookings(currentYear, currentMonth);
