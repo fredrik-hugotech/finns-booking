@@ -248,12 +248,13 @@ body.auth-locked {
   position: fixed;
   inset: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: clamp(1.5rem, 4vw, 3rem);
   background: rgba(9, 32, 24, 0.65);
   backdrop-filter: blur(8px);
   z-index: 1100;
+  overflow-y: auto;
 }
 
 .admin-panel[hidden] {
@@ -261,7 +262,7 @@ body.auth-locked {
 }
 
 .admin-panel-card {
-  width: min(1200px, 100%);
+  width: min(1180px, 100%);
   display: flex;
   flex-direction: column;
   gap: clamp(1.5rem, 4vw, 2.5rem);
@@ -269,6 +270,7 @@ body.auth-locked {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: clamp(1.5rem, 4vw, 2.8rem);
+  margin: clamp(2rem, 6vh, 3.5rem) auto;
 }
 
 .admin-panel-header {
@@ -322,6 +324,26 @@ body.auth-locked {
 .admin-panel-body {
   display: grid;
   gap: clamp(1.25rem, 3.5vw, 2rem);
+}
+
+.admin-panel .month-calendar {
+  grid-template-columns: repeat(7, minmax(56px, 1fr));
+  gap: clamp(0.55rem, 1.8vw, 0.9rem);
+}
+
+.admin-panel .month-nav button {
+  width: clamp(2.9rem, 8vw, 3.25rem);
+  height: clamp(2.9rem, 8vw, 3.25rem);
+  font-size: clamp(1.1rem, 3vw, 1.3rem);
+}
+
+.admin-panel .day-cell {
+  padding: clamp(0.85rem, 2.4vw, 1.05rem) 0.35rem;
+  font-size: clamp(0.95rem, 2.6vw, 1.1rem);
+}
+
+.admin-panel .day-name {
+  font-size: clamp(0.82rem, 1.9vw, 0.9rem);
 }
 
 .admin-calendar-card .card-header p {

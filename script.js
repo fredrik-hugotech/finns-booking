@@ -1192,8 +1192,16 @@ async function initAdminView() {
   const today = new Date();
   adminYear = today.getFullYear();
   adminMonth = today.getMonth();
-  adminActiveDate = todayDateString();
+  const todayStr = todayDateString();
+  adminActiveDate = todayStr;
   await loadAdminMonth(adminYear, adminMonth);
+  if (!adminActiveDate) {
+    adminActiveDate = todayStr;
+    loadAdminTimesForDate(adminActiveDate);
+  }
+  if (adminPanel) {
+    adminPanel.scrollTop = 0;
+  }
 }
 
 function closeAdminView() {
