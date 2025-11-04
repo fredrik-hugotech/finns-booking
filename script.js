@@ -1104,7 +1104,7 @@ function renderMyBookings() {
     if (myBookingsLoaded) {
       message.textContent = 'Ingen aktive bookinger ble funnet.';
     } else {
-      message.textContent = 'Fyll ut telefonnummer og e-post for å vise dine bookinger.';
+      message.textContent = 'Fyll ut telefonnummer eller e-post for å vise dine bookinger.';
     }
     myBookingsListContainer.appendChild(message);
     return;
@@ -1182,25 +1182,34 @@ function renderMyBookings() {
 async function fetchMyBookings(email, phone) {
   const sanitizedEmail = String(email || '').trim();
   const sanitizedPhone = normalisePhone(phone);
-  const emailLower = sanitizedEmail.toLowerCase();
-  if (!sanitizedEmail || !sanitizedPhone) {
+  const hasEmail = Boolean(sanitizedEmail);
+  const hasPhone = Boolean(sanitizedPhone);
+  if (!hasEmail && !hasPhone) {
     return [];
   }
+  const emailLower = sanitizedEmail.toLowerCase();
   if (!supabaseClient) {
     return gatherAllKnownBookings().filter((booking) => {
-      const matchesEmail = String(booking.email || '').trim().toLowerCase() === emailLower;
-      const matchesPhone = phonesMatch(booking.phone, sanitizedPhone);
-      return matchesEmail && matchesPhone;
+      const matchesEmail = hasEmail
+        ? String(booking.email || '').trim().toLowerCase() === emailLower
+        : false;
+      const matchesPhone = hasPhone ? phonesMatch(booking.phone, sanitizedPhone) : false;
+      return (hasEmail && matchesEmail) || (hasPhone && matchesPhone);
     });
   }
   const escapedEmail = sanitizedEmail.replace(/[%_]/g, '\\$&');
-  const phonePattern = buildPhoneSearchPattern(sanitizedPhone);
-  let query = supabaseClient
-    .from('bookings')
-    .select('*')
-    .gte('date', todayDateString())
-    .ilike('email', escapedEmail);
-  if (phonePattern) {
+  const phonePattern = buildPhoneSearchPattern(sanitizedPhone) || sanitizedPhone;
+  let query = supabaseClient.from('bookings').select('*').gte('date', todayDateString());
+  if (hasEmail && hasPhone) {
+    const orFilters = [];
+    orFilters.push(`email.ilike.${escapedEmail}`);
+    if (phonePattern) {
+      orFilters.push(`phone.ilike.${phonePattern}`);
+    }
+    query = query.or(orFilters.join(','));
+  } else if (hasEmail) {
+    query = query.ilike('email', escapedEmail);
+  } else if (hasPhone && phonePattern) {
     query = query.ilike('phone', phonePattern);
   }
   query = query.order('date', { ascending: true }).order('time', { ascending: true });
@@ -1209,9 +1218,11 @@ async function fetchMyBookings(email, phone) {
     throw error;
   }
   return (data || []).filter((booking) => {
-    const matchesEmail = String(booking.email || '').trim().toLowerCase() === emailLower;
-    const matchesPhone = phonesMatch(booking.phone, sanitizedPhone);
-    return matchesEmail && matchesPhone;
+    const matchesEmail = hasEmail
+      ? String(booking.email || '').trim().toLowerCase() === emailLower
+      : false;
+    const matchesPhone = hasPhone ? phonesMatch(booking.phone, sanitizedPhone) : false;
+    return (hasEmail && matchesEmail) || (hasPhone && matchesPhone);
   });
 }
 
@@ -1232,8 +1243,8 @@ async function loadMyBookings(reuseCredentials = false, options = {}) {
   } else {
     email = String(myBookingsEmailInput?.value || '').trim();
     phone = normalisePhone(myBookingsPhoneInput?.value || '');
-    if (!email || !phone) {
-      updateMyBookingsFeedback('Fyll ut både telefonnummer og e-post for å hente dine bookinger.', 'error');
+    if (!email && !phone) {
+      updateMyBookingsFeedback('Fyll ut telefonnummer eller e-post for å hente dine bookinger.', 'error');
       return false;
     }
     myBookingsCredentials = { email, phone };
