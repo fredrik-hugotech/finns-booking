@@ -92,7 +92,28 @@ function addHourToTime(startTime) {
 
 function normalisePhone(value) {
   if (value == null) return '';
-  return String(value).replace(/\s+/g, '').trim();
+  let input = String(value).trim();
+  if (!input) {
+    return '';
+  }
+  let prefix = '';
+  if (input.startsWith('+')) {
+    prefix = '+';
+    input = input.slice(1);
+  }
+  const digits = input.replace(/\D+/g, '');
+  return digits ? `${prefix}${digits}` : prefix;
+}
+
+function buildPhoneSearchPattern(phone) {
+  if (!phone) return null;
+  const escapedCharacters = phone.split('').map((char) => {
+    if (char === '%') return '\\%';
+    if (char === '_') return '\\_';
+    if (char === '\\') return '\\\\';
+    return char;
+  });
+  return `%${escapedCharacters.join('%')}%`;
 }
 
 function getBookingDateTime(booking) {
@@ -1152,13 +1173,17 @@ async function fetchMyBookings(email, phone) {
     });
   }
   const escapedEmail = sanitizedEmail.replace(/[%_]/g, '\\$&');
-  const { data, error } = await supabaseClient
+  const phonePattern = buildPhoneSearchPattern(sanitizedPhone);
+  let query = supabaseClient
     .from('bookings')
     .select('*')
-    .ilike('email', escapedEmail)
     .gte('date', todayDateString())
-    .order('date', { ascending: true })
-    .order('time', { ascending: true });
+    .ilike('email', escapedEmail);
+  if (phonePattern) {
+    query = query.ilike('phone', phonePattern);
+  }
+  query = query.order('date', { ascending: true }).order('time', { ascending: true });
+  const { data, error } = await query;
   if (error) {
     throw error;
   }
@@ -1403,6 +1428,7 @@ async function submitBooking() {
   }
   const name = nameInput.value.trim();
   const phone = phoneInput.value.trim();
+  const normalisedPhoneValue = normalisePhone(phone);
   const email = emailInput.value.trim();
   const club = clubInput.value.trim();
   const gender = genderSelect.value;
@@ -1444,7 +1470,7 @@ async function submitBooking() {
       time: slot.time,
       lane: normalizeLane(slot.lane) || slot.lane,
       name,
-      phone,
+      phone: normalisedPhoneValue,
       email,
       club,
       gender,
