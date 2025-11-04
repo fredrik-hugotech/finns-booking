@@ -92,28 +92,49 @@ function addHourToTime(startTime) {
 
 function normalisePhone(value) {
   if (value == null) return '';
-  let input = String(value).trim();
+  const input = String(value).trim();
   if (!input) {
     return '';
   }
-  let prefix = '';
-  if (input.startsWith('+')) {
-    prefix = '+';
-    input = input.slice(1);
+  const digitsOnly = input.replace(/\D+/g, '');
+  return digitsOnly;
+}
+
+function extractPhoneDigits(value) {
+  if (value == null) return '';
+  return String(value)
+    .trim()
+    .replace(/\D+/g, '');
+}
+
+function getComparablePhoneDigits(value) {
+  const digits = extractPhoneDigits(value);
+  if (!digits) {
+    return '';
   }
-  const digits = input.replace(/\D+/g, '');
-  return digits ? `${prefix}${digits}` : prefix;
+  if (digits.length > 8) {
+    return digits.slice(-8);
+  }
+  return digits;
+}
+
+function phonesMatch(a, b) {
+  const digitsA = extractPhoneDigits(a);
+  const digitsB = extractPhoneDigits(b);
+  if (!digitsA || !digitsB) {
+    return false;
+  }
+  if (digitsA === digitsB) {
+    return true;
+  }
+  return digitsA.endsWith(digitsB) || digitsB.endsWith(digitsA);
 }
 
 function buildPhoneSearchPattern(phone) {
-  if (!phone) return null;
-  const escapedCharacters = phone.split('').map((char) => {
-    if (char === '%') return '\\%';
-    if (char === '_') return '\\_';
-    if (char === '\\') return '\\\\';
-    return char;
-  });
-  return `%${escapedCharacters.join('%')}%`;
+  const comparableDigits = getComparablePhoneDigits(phone);
+  if (!comparableDigits) return null;
+  const characters = comparableDigits.split('');
+  return `%${characters.join('%')}%`;
 }
 
 function getBookingDateTime(booking) {
@@ -1168,7 +1189,7 @@ async function fetchMyBookings(email, phone) {
   if (!supabaseClient) {
     return gatherAllKnownBookings().filter((booking) => {
       const matchesEmail = String(booking.email || '').trim().toLowerCase() === emailLower;
-      const matchesPhone = normalisePhone(booking.phone) === sanitizedPhone;
+      const matchesPhone = phonesMatch(booking.phone, sanitizedPhone);
       return matchesEmail && matchesPhone;
     });
   }
@@ -1189,7 +1210,7 @@ async function fetchMyBookings(email, phone) {
   }
   return (data || []).filter((booking) => {
     const matchesEmail = String(booking.email || '').trim().toLowerCase() === emailLower;
-    const matchesPhone = normalisePhone(booking.phone) === sanitizedPhone;
+    const matchesPhone = phonesMatch(booking.phone, sanitizedPhone);
     return matchesEmail && matchesPhone;
   });
 }
@@ -1345,7 +1366,7 @@ async function markBookingAsUnused(booking) {
           entry.time === booking.time &&
           normalizeLane(entry.lane) === normalizeLane(booking.lane) &&
           String(entry.email || '').trim().toLowerCase() === String(booking.email || '').trim().toLowerCase() &&
-          normalisePhone(entry.phone) === normalisePhone(booking.phone)
+          phonesMatch(entry.phone, booking.phone)
         );
       };
       monthBookings = monthBookings.filter((entry) => !matchesBooking(entry));
