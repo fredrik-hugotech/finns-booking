@@ -12,8 +12,8 @@
     />
     <link rel="stylesheet" href="style.css" />
   </head>
-  <body class="auth-locked">
-    <section id="loginOverlay" class="login-overlay" aria-labelledby="loginTitle">
+  <body>
+    <section id="loginOverlay" class="login-overlay" aria-labelledby="loginTitle" hidden>
       <form id="loginForm" class="login-card" novalidate>
         <div class="login-card-header">
           <h1 id="loginTitle">Finns.Fairway tilgang</h1>
@@ -31,12 +31,13 @@
           <p id="loginError" class="login-error" role="alert" aria-live="polite"></p>
         </div>
         <div class="login-card-footer">
-          <button type="submit" id="loginSubmit">Logg inn</button>
+          <button type="button" id="loginCancel" class="login-cancel">Avbryt</button>
+          <button type="submit" id="loginSubmit" class="login-submit">Logg inn</button>
         </div>
       </form>
     </section>
 
-    <div class="page" hidden>
+    <div class="page">
       <header class="site-header">
         <div class="header-inner">
           <img src="ff-logo-gronn.png" alt="Finns Fairway logo" class="logo" />
@@ -44,6 +45,9 @@
             <h1>Finns.Fairway</h1>
             <p>For en trygg og aktiv oppvekst</p>
           </div>
+        </div>
+        <div class="header-actions">
+          <button type="button" id="loginToggle" class="header-login">Logg inn</button>
         </div>
       </header>
 
@@ -176,6 +180,38 @@
         <p>&copy; <span id="year"></span> Finns.Fairway</p>
       </footer>
     </div>
+
+    <section id="adminPanel" class="admin-panel" hidden aria-labelledby="adminPanelTitle">
+      <div class="admin-panel-card">
+        <header class="admin-panel-header">
+          <div class="admin-panel-brand">
+            <img src="ff-logo-gronn.png" alt="Finns Fairway logo" class="logo" />
+            <div>
+              <h1 id="adminPanelTitle">Kalenderoversikt</h1>
+              <p>Full oversikt over bookinger i Sparebanken Norge Arena</p>
+            </div>
+          </div>
+          <div class="admin-panel-actions">
+            <button type="button" id="adminClose" class="admin-close">Tilbake til booking</button>
+          </div>
+        </header>
+        <div class="admin-panel-body">
+          <div class="card admin-calendar-card">
+            <div class="card-header">
+              <h2>Kalender</h2>
+              <p>Se alle bookinger med navn, e-post og telefonnummer.</p>
+            </div>
+            <div class="month-nav" role="toolbar" aria-label="Månedsnavigasjon for administrasjon">
+              <button id="adminPrevMonth" type="button" aria-label="Forrige måned">&laquo;</button>
+              <span id="adminMonthLabel" aria-live="polite"></span>
+              <button id="adminNextMonth" type="button" aria-label="Neste måned">&raquo;</button>
+            </div>
+            <div id="adminMonthCalendar" class="month-calendar" aria-live="polite"></div>
+            <div id="adminTimesList" class="times-list"></div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <section id="confirmationScreen" class="confirmation-screen" hidden>
       <div class="confirmation-card">

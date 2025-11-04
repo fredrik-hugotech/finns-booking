@@ -112,9 +112,30 @@ body.auth-locked {
 .login-card-footer {
   display: flex;
   justify-content: flex-end;
+  gap: 0.75rem;
 }
 
-.login-card-footer button {
+.login-cancel {
+  border: 1px solid rgba(0, 56, 44, 0.15);
+  background: transparent;
+  color: var(--green-800);
+  font: inherit;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0.6rem 1.5rem;
+  cursor: pointer;
+  transition: background 0.2s ease, border 0.2s ease, transform 0.2s ease;
+}
+
+.login-cancel:hover,
+.login-cancel:focus-visible {
+  background: rgba(0, 121, 92, 0.1);
+  border-color: rgba(0, 56, 44, 0.25);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.login-submit {
   border: none;
   border-radius: 999px;
   background: linear-gradient(135deg, var(--green-800), var(--green-600));
@@ -126,8 +147,8 @@ body.auth-locked {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.login-card-footer button:hover,
-.login-card-footer button:focus-visible {
+.login-submit:hover,
+.login-submit:focus-visible {
   transform: translateY(-1px);
   box-shadow: 0 12px 25px rgba(0, 56, 44, 0.22);
   outline: none;
@@ -156,6 +177,32 @@ body.auth-locked {
   display: flex;
   align-items: center;
   gap: 1.5rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.header-login {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--white);
+  font: inherit;
+  font-weight: 600;
+  padding: 0.6rem 1.5rem;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease, border 0.2s ease;
+}
+
+.header-login:hover,
+.header-login:focus-visible {
+  background: rgba(255, 255, 255, 0.14);
+  transform: translateY(-1px);
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.55);
 }
 
 .logo {
@@ -195,6 +242,148 @@ body.auth-locked {
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-1px);
+}
+
+.admin-panel {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  background: rgba(9, 32, 24, 0.65);
+  backdrop-filter: blur(8px);
+  z-index: 1100;
+}
+
+.admin-panel[hidden] {
+  display: none;
+}
+
+.admin-panel-card {
+  width: min(1200px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.5rem, 4vw, 2.5rem);
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: clamp(1.5rem, 4vw, 2.8rem);
+}
+
+.admin-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.admin-panel-brand {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+}
+
+.admin-panel-brand h1 {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2.3rem);
+  color: var(--green-900);
+}
+
+.admin-panel-brand p {
+  margin: 0.4rem 0 0;
+  color: var(--text-muted);
+}
+
+.admin-panel-actions {
+  display: flex;
+  align-items: center;
+}
+
+.admin-close {
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--green-800), var(--green-600));
+  color: var(--white);
+  font: inherit;
+  font-weight: 600;
+  padding: 0.7rem 1.6rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-close:hover,
+.admin-close:focus-visible {
+  transform: translateY(-1px);
+  outline: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-panel-body {
+  display: grid;
+  gap: clamp(1.25rem, 3.5vw, 2rem);
+}
+
+.admin-calendar-card .card-header p {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+}
+
+.admin-calendar-card .month-nav {
+  margin-top: 0.5rem;
+}
+
+.admin-calendar-card .times-list {
+  margin-top: clamp(1rem, 2.5vw, 1.6rem);
+}
+
+.admin-calendar-card .time-row {
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.time-row.admin-view {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.time-row.admin-view > span:first-child {
+  font-weight: 700;
+}
+
+.time-row.admin-view .time-status {
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0.2rem 0.75rem;
+}
+
+.time-status.available {
+  background: rgba(0, 121, 92, 0.12);
+  color: var(--green-800);
+}
+
+.time-status.limited {
+  background: rgba(255, 193, 7, 0.16);
+  color: #b06a00;
+}
+
+.time-status.full {
+  background: rgba(198, 40, 40, 0.18);
+  color: #8c1c1c;
+}
+
+.time-row.admin-view .time-bookings {
+  flex: 1 1 100%;
+}
+
+.booking-note {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.time-booking-item + .booking-note {
+  margin-top: 0.35rem;
 }
 
 main {
@@ -841,13 +1030,14 @@ footer {
     justify-content: flex-start;
   }
 
-  .header-cta {
+  .header-actions {
     width: 100%;
+    justify-content: flex-start;
   }
 
-  .header-link {
-    display: inline-flex;
+  .header-login {
     width: 100%;
+    display: inline-flex;
     justify-content: center;
     margin-top: 0.5rem;
   }
@@ -918,6 +1108,24 @@ footer {
   .confirmation-payment-note {
     font-size: 0.9rem;
   }
+
+  .admin-panel-card {
+    padding: clamp(1.1rem, 5vw, 1.6rem);
+  }
+
+  .admin-panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-panel-actions {
+    width: 100%;
+  }
+
+  .admin-close {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 @media (max-width: 540px) {
@@ -960,6 +1168,15 @@ footer {
 
   .confirmation-qr {
     width: min(200px, 80%);
+  }
+
+  .admin-panel-card {
+    padding: clamp(1rem, 6vw, 1.4rem);
+  }
+
+  .admin-panel-brand {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   footer {

@@ -30,7 +30,11 @@ const loginForm = document.getElementById('loginForm');
 const loginUsernameInput = document.getElementById('loginUsername');
 const loginPasswordInput = document.getElementById('loginPassword');
 const loginErrorBox = document.getElementById('loginError');
-const protectedPage = document.querySelector('.page');
+const loginToggleBtn = document.getElementById('loginToggle');
+const loginCancelBtn = document.getElementById('loginCancel');
+const publicPage = document.querySelector('.page');
+const adminPanel = document.getElementById('adminPanel');
+const adminCloseBtn = document.getElementById('adminClose');
 
 const CALENDAR_BUCKET = 'booking-calendar';
 const CALENDAR_FILENAME = 'bookings.ics';
@@ -108,6 +112,14 @@ let monthBookings = []; // bookings loaded for the current month
 let currentYear = new Date().getFullYear();
 let currentMonth = new Date().getMonth();
 let activeDate = null;
+let adminBookings = [];
+let adminYear = currentYear;
+let adminMonth = currentMonth;
+let adminActiveDate = null;
+
+function isAdminViewActive() {
+  return Boolean(isAuthenticated && adminPanel && !adminPanel.hidden);
+}
 
 // DOM elements for the new UI
 const monthLabel = document.getElementById('monthLabel');
@@ -129,6 +141,11 @@ const confirmationScreen = document.getElementById('confirmationScreen');
 const confirmationSlotsList = document.getElementById('confirmationSlots');
 const confirmationTotal = document.getElementById('confirmationTotal');
 const confirmationBackBtn = document.getElementById('confirmationBack');
+const adminMonthLabel = document.getElementById('adminMonthLabel');
+const adminMonthCalendar = document.getElementById('adminMonthCalendar');
+const adminTimesList = document.getElementById('adminTimesList');
+const adminPrevMonthBtn = document.getElementById('adminPrevMonth');
+const adminNextMonthBtn = document.getElementById('adminNextMonth');
 
 function escapeICS(text) {
   if (!text) return '';
@@ -308,10 +325,9 @@ async function refreshCalendarFeed() {
  * Load all bookings for the given month (inclusive).
  * If Supabase is not configured, no bookings will be loaded.
  */
-async function loadMonthBookings(year, month) {
+async function fetchMonthBookings(year, month) {
   if (!supabaseClient) {
-    monthBookings = [];
-    return;
+    return [];
   }
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const pad = (value) => String(value).padStart(2, '0');
@@ -324,13 +340,16 @@ async function loadMonthBookings(year, month) {
     .lte('date', endStr);
   if (error) {
     console.error('Error loading month bookings:', error);
-    monthBookings = [];
-  } else {
-    monthBookings = (data || []).map((booking) => ({
-      ...booking,
-      lane: normalizeLane(booking.lane)
-    }));
+    return [];
   }
+  return (data || []).map((booking) => ({
+    ...booking,
+    lane: normalizeLane(booking.lane)
+  }));
+}
+
+async function loadMonthBookings(year, month) {
+  monthBookings = await fetchMonthBookings(year, month);
 }
 
 /**
@@ -340,7 +359,7 @@ async function loadMonthBookings(year, month) {
  * no half-lane units remain, "half" if over 50% booked, otherwise
  * "available".
  */
-function computeDateStatus(dateStr) {
+function computeDateStatusFromBookings(dateStr, bookings, includeSelections) {
   const totalUnits = availableTimes.length * 2;
   let occupiedUnits = 0;
 
@@ -351,22 +370,50 @@ function computeDateStatus(dateStr) {
         timeUnits += laneUnits(b.lane);
       }
     });
-    monthBookings.forEach((b) => {
+    bookings.forEach((b) => {
       if (b.date === dateStr && b.time === time) {
         timeUnits += laneUnits(b.lane);
       }
     });
-    selectedSlots.forEach((b) => {
-      if (b.date === dateStr && b.time === time) {
-        timeUnits += laneUnits(b.lane);
-      }
-    });
+    if (includeSelections) {
+      selectedSlots.forEach((b) => {
+        if (b.date === dateStr && b.time === time) {
+          timeUnits += laneUnits(b.lane);
+        }
+      });
+    }
     occupiedUnits += Math.min(timeUnits, 2);
   });
 
   if (occupiedUnits >= totalUnits) return 'full';
   if (occupiedUnits >= totalUnits / 2) return 'half';
   return 'available';
+}
+
+function computeDateStatus(dateStr) {
+  return computeDateStatusFromBookings(dateStr, monthBookings, true);
+}
+
+function calculateTimeAvailability(dateStr, time, bookings, includeSelections) {
+  let occupied = 0;
+  preBookedTimes.forEach((b) => {
+    if (b.date === dateStr && b.time === time) {
+      occupied += laneUnits(b.lane);
+    }
+  });
+  bookings.forEach((b) => {
+    if (b.date === dateStr && b.time === time) {
+      occupied += laneUnits(b.lane);
+    }
+  });
+  if (includeSelections) {
+    selectedSlots.forEach((b) => {
+      if (b.date === dateStr && b.time === time) {
+        occupied += laneUnits(b.lane);
+      }
+    });
+  }
+  return Math.max(0, 2 - occupied);
 }
 
 /**
@@ -485,28 +532,15 @@ function loadTimesForDate(dateStr) {
     return acc;
   }, {});
 
+  const showAdminDetails = isAdminViewActive();
   let hasAvailable = false;
   availableTimes.forEach((time) => {
-    // Determine occupied units for this time
-    let occupied = 0;
-    preBookedTimes.forEach((b) => {
-      if (b.date === dateStr && b.time === time) {
-        occupied += laneUnits(b.lane);
-      }
-    });
-    monthBookings.forEach((b) => {
-      if (b.date === dateStr && b.time === time) {
-        occupied += laneUnits(b.lane);
-      }
-    });
-    selectedSlots.forEach((b) => {
-      if (b.date === dateStr && b.time === time) {
-        occupied += laneUnits(b.lane);
-      }
-    });
-    const avail = 2 - occupied;
+    const avail = calculateTimeAvailability(dateStr, time, monthBookings, true);
     if (avail > 0) {
       hasAvailable = true;
+    }
+    if (!showAdminDetails && avail <= 0) {
+      return;
     }
     const row = document.createElement('div');
     row.classList.add('time-row');
@@ -557,7 +591,7 @@ function loadTimesForDate(dateStr) {
         }
         return a.name.localeCompare(b.name);
       });
-    if (bookingsForTime.length > 0) {
+    if (showAdminDetails && bookingsForTime.length > 0) {
       const bookedList = document.createElement('ul');
       bookedList.classList.add('time-bookings');
       bookingsForTime.forEach((booking) => {
@@ -598,6 +632,230 @@ function loadTimesForDate(dateStr) {
     const p = document.createElement('p');
     p.textContent = 'Ingen ledige tider denne dagen.';
     timesList.appendChild(p);
+  }
+}
+
+function resetAdminTimesList() {
+  if (!adminTimesList) return;
+  adminTimesList.innerHTML = '';
+  const p = document.createElement('p');
+  p.textContent = 'Velg en dato i kalenderen for å se bookinger.';
+  adminTimesList.appendChild(p);
+}
+
+function isDateInMonth(dateStr, year, month) {
+  if (!dateStr) return false;
+  const [y, m] = dateStr.split('-').map((part) => Number(part));
+  return y === year && m === month + 1;
+}
+
+function renderAdminMonthCalendar() {
+  if (!adminMonthCalendar || !adminMonthLabel) return;
+  adminMonthCalendar.innerHTML = '';
+  const monthNames = [
+    'Januar',
+    'Februar',
+    'Mars',
+    'April',
+    'Mai',
+    'Juni',
+    'Juli',
+    'August',
+    'September',
+    'Oktober',
+    'November',
+    'Desember'
+  ];
+  const dayNames = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
+  adminMonthLabel.textContent = `${monthNames[adminMonth]} ${adminYear}`;
+  dayNames.forEach((name) => {
+    const headerCell = document.createElement('div');
+    headerCell.className = 'day-cell day-name';
+    headerCell.textContent = name;
+    adminMonthCalendar.appendChild(headerCell);
+  });
+  const firstDay = new Date(adminYear, adminMonth, 1);
+  const daysInMonth = new Date(adminYear, adminMonth + 1, 0).getDate();
+  const startWeekday = (firstDay.getDay() + 6) % 7;
+  for (let i = 0; i < startWeekday; i++) {
+    const blank = document.createElement('div');
+    blank.className = 'day-cell empty';
+    adminMonthCalendar.appendChild(blank);
+  }
+  const todayStr = todayDateString();
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${adminYear}-${String(adminMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const cell = document.createElement('div');
+    cell.classList.add('day-cell');
+    const status = computeDateStatusFromBookings(dateStr, adminBookings, false);
+    if (status === 'full') {
+      cell.classList.add('full-day');
+    } else if (status === 'half') {
+      cell.classList.add('half-day');
+    } else {
+      cell.classList.add('available-day');
+    }
+    if (dateStr === todayStr) {
+      cell.classList.add('today');
+    }
+    if (adminActiveDate === dateStr) {
+      cell.classList.add('active-day');
+    }
+    cell.textContent = day;
+    cell.setAttribute('role', 'button');
+    cell.setAttribute('tabindex', '0');
+    cell.addEventListener('click', () => {
+      loadAdminTimesForDate(dateStr);
+    });
+    cell.addEventListener('keydown', (evt) => {
+      if (evt.key === 'Enter' || evt.key === ' ') {
+        evt.preventDefault();
+        loadAdminTimesForDate(dateStr);
+      }
+    });
+    adminMonthCalendar.appendChild(cell);
+  }
+}
+
+function loadAdminTimesForDate(dateStr) {
+  if (!adminTimesList) return;
+  adminActiveDate = dateStr;
+  renderAdminMonthCalendar();
+  adminTimesList.innerHTML = '';
+  const heading = document.createElement('h3');
+  heading.textContent = `Bookinger – ${formatDateLabel(dateStr)}`;
+  adminTimesList.appendChild(heading);
+
+  const bookingsForDate = adminBookings
+    .filter((booking) => booking.date === dateStr)
+    .map((booking) => ({
+      ...booking,
+      lane: normalizeLane(booking.lane),
+      name: String(booking.name ?? '').trim(),
+      email: String(booking.email ?? '').trim(),
+      phone: String(booking.phone ?? '').trim()
+    }));
+
+  const bookingsByTime = bookingsForDate.reduce((acc, booking) => {
+    if (!acc[booking.time]) {
+      acc[booking.time] = [];
+    }
+    acc[booking.time].push(booking);
+    return acc;
+  }, {});
+
+  availableTimes.forEach((time) => {
+    const row = document.createElement('div');
+    row.classList.add('time-row', 'admin-view');
+    const label = document.createElement('span');
+    label.textContent = formatTimeInterval(time);
+    row.appendChild(label);
+
+    const remaining = calculateTimeAvailability(dateStr, time, adminBookings, false);
+    const statusSpan = document.createElement('span');
+    statusSpan.classList.add('time-status');
+    if (remaining === 2) {
+      statusSpan.classList.add('available');
+      statusSpan.textContent = 'Ledig';
+    } else if (remaining === 1) {
+      statusSpan.classList.add('limited');
+      statusSpan.textContent = 'Delvis ledig';
+    } else {
+      statusSpan.classList.add('full');
+      statusSpan.textContent = 'Fullbooket';
+    }
+    row.appendChild(statusSpan);
+
+    const list = document.createElement('ul');
+    list.classList.add('time-bookings');
+
+    const prebookedEntries = preBookedTimes
+      .filter((booking) => booking.date === dateStr && booking.time === time)
+      .map((booking) => ({
+        lane: normalizeLane(booking.lane),
+        name: booking.name || 'Internt reservert',
+        email: booking.email || '',
+        phone: booking.phone || '',
+        note: booking.note || 'Forhåndsblokkert tid',
+        type: 'prebooked'
+      }));
+
+    const bookingsForTime = (bookingsByTime[time] || []).map((booking) => ({
+      ...booking,
+      type: 'booking'
+    }));
+
+    const combined = [...prebookedEntries, ...bookingsForTime].sort((a, b) => {
+      const laneDiff = laneUnits(b.lane) - laneUnits(a.lane);
+      if (laneDiff !== 0) {
+        return laneDiff;
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
+    if (combined.length > 0) {
+      combined.forEach((entry) => {
+        const item = document.createElement('li');
+        item.classList.add('time-booking-item');
+        const laneLabel = entry.lane === 'full' ? 'Full bane' : 'Halv bane';
+        const nameText = entry.name || 'Ukjent navn';
+        const laneSpan = document.createElement('span');
+        laneSpan.classList.add('booking-lane');
+        laneSpan.textContent = laneLabel;
+        const nameSpan = document.createElement('span');
+        nameSpan.classList.add('booking-name');
+        nameSpan.textContent = nameText;
+        item.appendChild(laneSpan);
+        item.appendChild(document.createTextNode(': '));
+        item.appendChild(nameSpan);
+
+        const contactParts = [];
+        if (entry.email) contactParts.push(entry.email);
+        if (entry.phone) contactParts.push(entry.phone);
+        if (contactParts.length > 0) {
+          const contactSpan = document.createElement('span');
+          contactSpan.classList.add('booking-contact');
+          contactSpan.textContent = contactParts.join(' · ');
+          item.appendChild(document.createTextNode(' – '));
+          item.appendChild(contactSpan);
+        }
+        if (entry.type === 'prebooked' && entry.note) {
+          const noteSpan = document.createElement('span');
+          noteSpan.classList.add('booking-note');
+          noteSpan.textContent = entry.note;
+          item.appendChild(document.createTextNode(' – '));
+          item.appendChild(noteSpan);
+        }
+        list.appendChild(item);
+      });
+      row.appendChild(list);
+    } else {
+      const noBooking = document.createElement('p');
+      noBooking.textContent = 'Ingen bookinger registrert.';
+      noBooking.classList.add('booking-note');
+      row.appendChild(noBooking);
+    }
+
+    adminTimesList.appendChild(row);
+  });
+}
+
+async function loadAdminMonth(year, month) {
+  adminYear = year;
+  adminMonth = month;
+  if (adminYear === currentYear && adminMonth === currentMonth) {
+    adminBookings = monthBookings.slice();
+  } else {
+    adminBookings = await fetchMonthBookings(adminYear, adminMonth);
+  }
+  if (!isDateInMonth(adminActiveDate, adminYear, adminMonth)) {
+    adminActiveDate = null;
+  }
+  renderAdminMonthCalendar();
+  if (adminActiveDate) {
+    loadAdminTimesForDate(adminActiveDate);
+  } else {
+    resetAdminTimesList();
   }
 }
 
@@ -722,6 +980,19 @@ async function submitBooking() {
     // Refresh month bookings so the calendar updates
     await loadMonthBookings(currentYear, currentMonth);
     await refreshCalendarFeed();
+    if (isAdminViewActive()) {
+      if (adminYear === currentYear && adminMonth === currentMonth) {
+        adminBookings = monthBookings.slice();
+      } else {
+        adminBookings = await fetchMonthBookings(adminYear, adminMonth);
+      }
+      renderAdminMonthCalendar();
+      if (adminActiveDate) {
+        loadAdminTimesForDate(adminActiveDate);
+      } else {
+        resetAdminTimesList();
+      }
+    }
   } else {
     // If Supabase isn't configured, just add to monthBookings in memory
     selectedSlots.forEach((slot) => {
@@ -737,6 +1008,17 @@ async function submitBooking() {
         age
       });
     });
+    if (isAdminViewActive()) {
+      if (adminYear === currentYear && adminMonth === currentMonth) {
+        adminBookings = monthBookings.slice();
+      }
+      renderAdminMonthCalendar();
+      if (adminActiveDate) {
+        loadAdminTimesForDate(adminActiveDate);
+      } else {
+        resetAdminTimesList();
+      }
+    }
   }
   const confirmedSlots = selectedSlots.map((slot) => ({ ...slot }));
   // Clear selection and form
@@ -830,15 +1112,25 @@ let pollTimer = null;
 function startCalendarPolling() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
-    if (!isAuthenticated) {
-      return;
-    }
     try {
       await loadMonthBookings(currentYear, currentMonth);
       if (activeDate) {
         loadTimesForDate(activeDate);
       } else {
         renderMonthCalendar();
+      }
+      if (isAdminViewActive()) {
+        if (adminYear === currentYear && adminMonth === currentMonth) {
+          adminBookings = monthBookings.slice();
+        } else {
+          adminBookings = await fetchMonthBookings(adminYear, adminMonth);
+        }
+        renderAdminMonthCalendar();
+        if (adminActiveDate) {
+          loadAdminTimesForDate(adminActiveDate);
+        } else {
+          resetAdminTimesList();
+        }
       }
     } catch (e) {
       console.debug('Polling-feil (ignoreres):', e?.message || e);
@@ -847,12 +1139,25 @@ function startCalendarPolling() {
 }
 
 document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState === 'visible' && isAuthenticated) {
+  if (document.visibilityState === 'visible') {
     await loadMonthBookings(currentYear, currentMonth);
     if (activeDate) {
       loadTimesForDate(activeDate);
     } else {
       renderMonthCalendar();
+    }
+    if (isAdminViewActive()) {
+      if (adminYear === currentYear && adminMonth === currentMonth) {
+        adminBookings = monthBookings.slice();
+      } else {
+        adminBookings = await fetchMonthBookings(adminYear, adminMonth);
+      }
+      renderAdminMonthCalendar();
+      if (adminActiveDate) {
+        loadAdminTimesForDate(adminActiveDate);
+      } else {
+        resetAdminTimesList();
+      }
     }
   }
 });
@@ -883,6 +1188,42 @@ async function initBooking() {
   }
 }
 
+async function initAdminView() {
+  const today = new Date();
+  adminYear = today.getFullYear();
+  adminMonth = today.getMonth();
+  adminActiveDate = todayDateString();
+  await loadAdminMonth(adminYear, adminMonth);
+}
+
+function closeAdminView() {
+  isAuthenticated = false;
+  if (adminPanel) {
+    adminPanel.hidden = true;
+  }
+  if (publicPage) {
+    publicPage.hidden = false;
+  }
+  if (loginOverlay) {
+    loginOverlay.hidden = true;
+  }
+  adminActiveDate = null;
+  resetAdminTimesList();
+  if (loginErrorBox) {
+    loginErrorBox.textContent = '';
+  }
+  loginForm?.reset();
+  loginUsernameInput.value = '';
+  loginPasswordInput.value = '';
+  document.body.classList.remove('has-overlay');
+  if (activeDate) {
+    loadTimesForDate(activeDate);
+  } else {
+    renderMonthCalendar();
+  }
+  loginToggleBtn?.focus();
+}
+
 async function processLogin() {
   if (!loginUsernameInput || !loginPasswordInput) {
     return;
@@ -907,13 +1248,17 @@ async function processLogin() {
   if (loginOverlay) {
     loginOverlay.hidden = true;
   }
-  if (protectedPage) {
-    protectedPage.hidden = false;
+  document.body.classList.remove('has-overlay');
+  if (publicPage) {
+    publicPage.hidden = true;
   }
-  document.body.classList.remove('auth-locked');
+  if (adminPanel) {
+    adminPanel.hidden = false;
+  }
 
   try {
     await initBooking();
+    await initAdminView();
   } catch (error) {
     isAuthenticated = false;
     if (loginErrorBox) {
@@ -922,10 +1267,13 @@ async function processLogin() {
     if (loginOverlay) {
       loginOverlay.hidden = false;
     }
-    if (protectedPage) {
-      protectedPage.hidden = true;
+    document.body.classList.add('has-overlay');
+    if (publicPage) {
+      publicPage.hidden = false;
     }
-    document.body.classList.add('auth-locked');
+    if (adminPanel) {
+      adminPanel.hidden = true;
+    }
     console.error('Feil under innlasting av kalenderen:', error);
     loginPasswordInput.value = '';
     loginPasswordInput.focus();
@@ -942,9 +1290,85 @@ if (loginForm) {
   });
 }
 
-if (loginUsernameInput && !loginUsernameInput.value) {
-  loginUsernameInput.focus();
+if (loginToggleBtn) {
+  loginToggleBtn.addEventListener('click', () => {
+    if (loginForm) {
+      loginForm.reset();
+    }
+    if (loginErrorBox) {
+      loginErrorBox.textContent = '';
+    }
+    if (loginOverlay) {
+      loginOverlay.hidden = false;
+    }
+    document.body.classList.add('has-overlay');
+    loginUsernameInput?.focus();
+  });
 }
+
+if (loginCancelBtn) {
+  loginCancelBtn.addEventListener('click', () => {
+    if (loginForm) {
+      loginForm.reset();
+    }
+    if (loginOverlay) {
+      loginOverlay.hidden = true;
+    }
+    if (loginErrorBox) {
+      loginErrorBox.textContent = '';
+    }
+    document.body.classList.remove('has-overlay');
+    loginToggleBtn?.focus();
+  });
+}
+
+if (adminCloseBtn) {
+  adminCloseBtn.addEventListener('click', () => {
+    closeAdminView();
+  });
+}
+
+if (adminPrevMonthBtn) {
+  adminPrevMonthBtn.addEventListener('click', async () => {
+    if (adminMonth === 0) {
+      adminMonth = 11;
+      adminYear -= 1;
+    } else {
+      adminMonth -= 1;
+    }
+    await loadAdminMonth(adminYear, adminMonth);
+  });
+}
+
+if (adminNextMonthBtn) {
+  adminNextMonthBtn.addEventListener('click', async () => {
+    if (adminMonth === 11) {
+      adminMonth = 0;
+      adminYear += 1;
+    } else {
+      adminMonth += 1;
+    }
+    await loadAdminMonth(adminYear, adminMonth);
+  });
+}
+
+if (adminTimesList) {
+  resetAdminTimesList();
+}
+
+initBooking().catch((error) => {
+  console.error('Feil ved oppstart av booking-siden:', error);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    if (loginOverlay && !loginOverlay.hidden) {
+      loginCancelBtn?.click();
+    } else if (isAdminViewActive()) {
+      closeAdminView();
+    }
+  }
+});
 
 // Set current year in footer
 const yearSpan = document.getElementById('year');
