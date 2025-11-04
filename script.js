@@ -120,29 +120,173 @@ function phonesMatch(a, b) {
   return digitsA.endsWith(digitsB) || digitsB.endsWith(digitsA);
 }
 
-function buildBookingIdentityFilter(booking) {
+function normaliseTimeValue(value) {
+  if (value == null) {
+    return '';
+  }
+  const parts = String(value).trim().split(':');
+  if (!parts.length) {
+    return '';
+  }
+  const hours = String(parts[0] ?? '').padStart(2, '0');
+  const minutes = String(parts[1] ?? '00').padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+function buildTimeQueryValues(value) {
+  const base = normaliseTimeValue(value);
+  if (!base) {
+    return [];
+  }
+  const withSeconds = `${base}:00`;
+  return withSeconds === base ? [base] : [base, withSeconds];
+}
+
+function lanesEquivalent(a, b) {
+  return normalizeLane(a) === normalizeLane(b);
+}
+
+function laneAliasValues(lane) {
+  const normalised = normalizeLane(lane);
+  if (!normalised) {
+    return [];
+  }
+  if (normalised === 'full') {
+    return ['full', 'full bane', 'full lane'];
+  }
+  if (normalised === 'half') {
+    return ['half', 'halv', 'halv bane', 'half lane'];
+  }
+  return [normalised];
+}
+
+function parseDateParts(dateStr) {
+  if (!dateStr) {
+    return null;
+  }
+  const [yearStr, monthStr, dayStr] = String(dateStr).split('-');
+  const year = Number(yearStr);
+  const monthIndex = Number(monthStr) - 1;
+  const day = Number(dayStr);
+  if ([year, monthIndex, day].some((part) => Number.isNaN(part))) {
+    return null;
+  }
+  return { year, monthIndex, day };
+}
+
+async function locateBookingByContact(booking) {
   if (!booking) {
     return null;
   }
-  const filter = {};
-  const addIfPresent = (key, value, normaliser = (val) => val) => {
-    if (value == null) {
-      return;
-    }
-    const normalised = normaliser(value);
-    if (normalised) {
-      filter[key] = normalised;
-    }
-  };
+  const dateStr = String(booking.date || '').trim();
+  const timeStr = normaliseTimeValue(booking.time);
+  const laneValue = normalizeLane(booking.lane);
+  if (!dateStr || !timeStr || !laneValue) {
+    return null;
+  }
 
-  addIfPresent('date', booking.date, (val) => String(val).trim());
-  addIfPresent('time', booking.time, (val) => String(val).trim());
-  addIfPresent('lane', booking.lane, (val) => normalizeLane(val));
-  addIfPresent('name', booking.name, (val) => String(val).trim());
-  addIfPresent('email', booking.email, (val) => String(val).trim());
-  addIfPresent('phone', booking.phone, (val) => normalisePhone(val));
+  const parsedDate = parseDateParts(dateStr);
+  if (!parsedDate) {
+    return null;
+  }
 
-  return Object.keys(filter).length ? filter : null;
+  const { year, monthIndex } = parsedDate;
+  let monthData = [];
+  if (year === currentYear && monthIndex === currentMonth) {
+    monthData = monthBookings.slice();
+  } else if (adminBookings.length && year === adminYear && monthIndex === adminMonth) {
+    monthData = adminBookings.slice();
+  } else {
+    monthData = await fetchMonthBookings(year, monthIndex);
+  }
+
+  const targetEmail = String(booking.email || '').trim().toLowerCase();
+  const targetPhone = normalisePhone(booking.phone);
+
+  return (monthData || []).find((entry) => {
+    if (!entry) {
+      return false;
+    }
+    const entryDate = String(entry.date || '').trim();
+    const entryTime = normaliseTimeValue(entry.time);
+    if (entryDate !== dateStr) {
+      return false;
+    }
+    if (entryTime !== timeStr) {
+      return false;
+    }
+    if (!lanesEquivalent(entry.lane, laneValue)) {
+      return false;
+    }
+    const entryPhone = normalisePhone(entry.phone);
+    const entryEmail = String(entry.email || '').trim().toLowerCase();
+    const phoneMatches = targetPhone && entryPhone && phonesMatch(entryPhone, targetPhone);
+    const emailMatches = targetEmail && entryEmail && entryEmail === targetEmail;
+    return phoneMatches || emailMatches;
+  }) || null;
+}
+
+async function deleteBookingByIdentity(booking) {
+  if (!supabaseClient || !booking) {
+    return null;
+  }
+  const dateStr = String(booking.date || '').trim();
+  const timeValues = buildTimeQueryValues(booking.time);
+  const laneValues = laneAliasValues(booking.lane);
+  const phoneValue = normalisePhone(booking.phone);
+  const emailValue = String(booking.email || '').trim();
+
+  if (!dateStr || !timeValues.length || !laneValues.length) {
+    return null;
+  }
+
+  const contactCombos = [];
+  if (phoneValue && emailValue) {
+    contactCombos.push({ phone: phoneValue, email: emailValue });
+  }
+  if (phoneValue) {
+    contactCombos.push({ phone: phoneValue });
+  }
+  if (emailValue) {
+    contactCombos.push({ email: emailValue });
+  }
+
+  for (const timeValue of timeValues) {
+    for (const combo of contactCombos) {
+      let query = supabaseClient.from('bookings').delete().eq('date', dateStr).eq('time', timeValue);
+      if (laneValues.length === 1) {
+        query = query.eq('lane', laneValues[0]);
+      } else if (laneValues.length > 1) {
+        query = query.in('lane', laneValues);
+      }
+      if (combo.phone) {
+        query = query.eq('phone', combo.phone);
+      }
+      if (combo.email) {
+        query = query.eq('email', combo.email);
+      }
+      const result = await query.select('id');
+      if (result.error) {
+        throw result.error;
+      }
+      if (result.data && result.data.length) {
+        return result;
+      }
+    }
+  }
+
+  const located = await locateBookingByContact(booking);
+  if (located && located.id != null) {
+    const retry = await supabaseClient.from('bookings').delete().eq('id', located.id).select('id');
+    if (retry.error) {
+      throw retry.error;
+    }
+    if (retry.data && retry.data.length) {
+      return retry;
+    }
+  }
+
+  return null;
 }
 
 function getBookingDateTime(booking) {
@@ -1425,19 +1569,8 @@ async function markBookingAsUnused(booking) {
       }
 
       if (!deleteResult.data || deleteResult.data.length === 0) {
-        const identityFilter = buildBookingIdentityFilter(booking);
-        if (!identityFilter || !identityFilter.date || !identityFilter.time) {
-          throw new Error('Fant ingen tilhørende booking å slette.');
-        }
-        let fallbackQuery = supabaseClient.from('bookings').delete();
-        Object.entries(identityFilter).forEach(([key, value]) => {
-          fallbackQuery = fallbackQuery.eq(key, value);
-        });
-        const fallbackResult = await fallbackQuery.select('id');
-        if (fallbackResult.error) {
-          throw fallbackResult.error;
-        }
-        if (!fallbackResult.data || fallbackResult.data.length === 0) {
+        const fallbackResult = await deleteBookingByIdentity(booking);
+        if (!fallbackResult || !fallbackResult.data || !fallbackResult.data.length) {
           throw new Error('Fant ingen tilhørende booking å slette.');
         }
         deleteResult = fallbackResult;
