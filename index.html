@@ -37,6 +37,41 @@
       </form>
     </section>
 
+    <section
+      id="myBookingsOverlay"
+      class="my-bookings-overlay"
+      aria-labelledby="myBookingsTitle"
+      hidden
+    >
+      <div class="my-bookings-card">
+        <header class="my-bookings-header">
+          <div>
+            <h1 id="myBookingsTitle">Mine tider</h1>
+            <p>Oppgi kontaktinformasjonen du brukte ved bestilling for å se aktive tider.</p>
+          </div>
+          <button type="button" id="myBookingsClose" class="my-bookings-close" aria-label="Lukk Mine tider">
+            Lukk
+          </button>
+        </header>
+        <form id="myBookingsForm" class="my-bookings-form" novalidate>
+          <div class="form-row">
+            <label for="myBookingsPhone">Telefonnummer</label>
+            <input type="tel" id="myBookingsPhone" autocomplete="tel" required />
+          </div>
+          <div class="form-row">
+            <label for="myBookingsEmail">E-post</label>
+            <input type="email" id="myBookingsEmail" autocomplete="email" required />
+          </div>
+          <button type="submit" class="my-bookings-submit">Vis mine tider</button>
+        </form>
+        <p class="my-bookings-note">
+          Å slette en tid gir ingen refusjon, men frigjør banen for andre lag hos Finns Fairway.
+        </p>
+        <div id="myBookingsFeedback" class="my-bookings-feedback" role="status" aria-live="polite"></div>
+        <div id="myBookingsList" class="my-bookings-list"></div>
+      </div>
+    </section>
+
     <div class="page">
       <header class="site-header">
         <div class="header-inner">
@@ -47,6 +82,7 @@
           </div>
         </div>
         <div class="header-actions">
+          <button type="button" id="myBookingsToggle" class="header-my-bookings">Mine tider</button>
           <button type="button" id="loginToggle" class="header-login">Logg inn</button>
         </div>
       </header>

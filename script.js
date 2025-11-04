@@ -32,6 +32,14 @@ const loginPasswordInput = document.getElementById('loginPassword');
 const loginErrorBox = document.getElementById('loginError');
 const loginToggleBtn = document.getElementById('loginToggle');
 const loginCancelBtn = document.getElementById('loginCancel');
+const myBookingsOverlay = document.getElementById('myBookingsOverlay');
+const myBookingsToggleBtn = document.getElementById('myBookingsToggle');
+const myBookingsCloseBtn = document.getElementById('myBookingsClose');
+const myBookingsForm = document.getElementById('myBookingsForm');
+const myBookingsPhoneInput = document.getElementById('myBookingsPhone');
+const myBookingsEmailInput = document.getElementById('myBookingsEmail');
+const myBookingsListContainer = document.getElementById('myBookingsList');
+const myBookingsFeedback = document.getElementById('myBookingsFeedback');
 const publicPage = document.querySelector('.page');
 const adminPanel = document.getElementById('adminPanel');
 const adminCloseBtn = document.getElementById('adminClose');
@@ -82,6 +90,64 @@ function addHourToTime(startTime) {
   return `${pad(endHour)}:${pad(endMinute)}`;
 }
 
+function normalisePhone(value) {
+  if (value == null) return '';
+  return String(value).replace(/\s+/g, '').trim();
+}
+
+function getBookingDateTime(booking) {
+  if (!booking || !booking.date) return null;
+  const [yearStr, monthStr, dayStr] = booking.date.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  if ([year, month, day].some((part) => Number.isNaN(part))) {
+    return null;
+  }
+  const [hourStr = '0', minuteStr = '0'] = String(booking.time || '00:00').split(':');
+  const hour = Number(hourStr);
+  const minute = Number(minuteStr);
+  return new Date(year, month - 1, day, Number.isNaN(hour) ? 0 : hour, Number.isNaN(minute) ? 0 : minute);
+}
+
+function filterActiveBookings(bookings) {
+  if (!Array.isArray(bookings)) {
+    return [];
+  }
+  const now = new Date();
+  return bookings
+    .filter((booking) => {
+      const start = getBookingDateTime(booking);
+      return start && start.getTime() >= now.getTime();
+    })
+    .sort((a, b) => {
+      const startA = getBookingDateTime(a)?.getTime() ?? 0;
+      const startB = getBookingDateTime(b)?.getTime() ?? 0;
+      if (startA !== startB) {
+        return startA - startB;
+      }
+      const laneA = laneUnits(normalizeLane(a?.lane));
+      const laneB = laneUnits(normalizeLane(b?.lane));
+      if (laneA !== laneB) {
+        return laneB - laneA;
+      }
+      return String(a?.name || '').localeCompare(String(b?.name || ''));
+    });
+}
+
+function gatherAllKnownBookings() {
+  const combined = [...monthBookings, ...adminBookings];
+  const unique = new Map();
+  combined.forEach((booking) => {
+    if (!booking) return;
+    const key = booking.id != null ? `id:${booking.id}` : `${booking.date}|${booking.time}|${booking.name}|${booking.phone}|${booking.email}|${booking.lane}`;
+    if (!unique.has(key)) {
+      unique.set(key, booking);
+    }
+  });
+  return Array.from(unique.values());
+}
+
 // List any pre‑booked times here.  Each entry must include a date
 // string (YYYY‑MM‑DD), a time (HH:MM) and a lane type.  Lane
 // conflicts are resolved by blocking both halves of a full booking.
@@ -126,6 +192,9 @@ let adminBookings = [];
 let adminYear = currentYear;
 let adminMonth = currentMonth;
 let adminActiveDate = null;
+let myBookings = [];
+let myBookingsCredentials = null;
+let myBookingsLoaded = false;
 
 function isAdminViewActive() {
   return Boolean(isAuthenticated && adminPanel && !adminPanel.hidden);
@@ -156,6 +225,19 @@ const adminMonthCalendar = document.getElementById('adminMonthCalendar');
 const adminTimesList = document.getElementById('adminTimesList');
 const adminPrevMonthBtn = document.getElementById('adminPrevMonth');
 const adminNextMonthBtn = document.getElementById('adminNextMonth');
+
+function updateBodyOverlayState() {
+  const hasOverlayVisible = Boolean(
+    (loginOverlay && !loginOverlay.hidden) ||
+      (confirmationScreen && !confirmationScreen.hidden) ||
+      (myBookingsOverlay && !myBookingsOverlay.hidden)
+  );
+  if (hasOverlayVisible) {
+    document.body.classList.add('has-overlay');
+  } else {
+    document.body.classList.remove('has-overlay');
+  }
+}
 
 function escapeICS(text) {
   if (!text) return '';
@@ -960,6 +1042,304 @@ async function loadAdminMonth(year, month) {
   }
 }
 
+function updateMyBookingsFeedback(message, type) {
+  if (!myBookingsFeedback) return;
+  myBookingsFeedback.textContent = message || '';
+  myBookingsFeedback.classList.remove('is-error', 'is-success');
+  if (type === 'error') {
+    myBookingsFeedback.classList.add('is-error');
+  } else if (type === 'success') {
+    myBookingsFeedback.classList.add('is-success');
+  }
+}
+
+function renderMyBookings() {
+  if (!myBookingsListContainer) return;
+  myBookingsListContainer.innerHTML = '';
+  if (!myBookings.length) {
+    const message = document.createElement('p');
+    message.classList.add('my-booking-empty');
+    if (myBookingsLoaded) {
+      message.textContent = 'Ingen aktive bookinger ble funnet.';
+    } else {
+      message.textContent = 'Fyll ut telefonnummer og e-post for å vise dine bookinger.';
+    }
+    myBookingsListContainer.appendChild(message);
+    return;
+  }
+  const list = document.createElement('ul');
+  list.classList.add('my-bookings-items');
+  myBookings.forEach((booking) => {
+    const normalizedLane = normalizeLane(booking.lane);
+    const laneLabel = normalizedLane === 'full' ? 'Full bane' : 'Halv bane';
+    const item = document.createElement('li');
+    item.classList.add('my-booking-item');
+
+    const header = document.createElement('div');
+    header.classList.add('my-booking-header');
+
+    const title = document.createElement('p');
+    title.classList.add('my-booking-title');
+    title.textContent = `${formatDateLabel(booking.date)} kl ${formatTimeInterval(booking.time)} – ${laneLabel}`;
+    header.appendChild(title);
+
+    const actionBtn = document.createElement('button');
+    actionBtn.type = 'button';
+    actionBtn.classList.add('my-booking-action');
+    actionBtn.textContent = 'Ubenyttet tid';
+    actionBtn.addEventListener('click', () => {
+      markBookingAsUnused(booking);
+    });
+    header.appendChild(actionBtn);
+
+    item.appendChild(header);
+
+    const metaEntries = [];
+    const nameValue = String(booking.name ?? '').trim();
+    if (nameValue) {
+      metaEntries.push({ label: 'Navn', value: nameValue });
+    }
+    const clubValue = String(booking.club ?? '').trim();
+    if (clubValue) {
+      metaEntries.push({ label: 'Klubb', value: clubValue });
+    }
+    const genderValue = String(booking.gender ?? '').trim();
+    if (genderValue) {
+      metaEntries.push({ label: 'Kjønn', value: formatGenderLabel(genderValue) });
+    }
+    const ageValue = String(booking.age ?? '').trim();
+    if (ageValue) {
+      metaEntries.push({ label: 'Årskull', value: ageValue });
+    }
+    const emailValue = String(booking.email ?? '').trim();
+    if (emailValue) {
+      metaEntries.push({ label: 'E-post', value: emailValue, classes: ['booking-contact'], data: { type: 'E-post' } });
+    }
+    const phoneValue = String(booking.phone ?? '').trim();
+    if (phoneValue) {
+      metaEntries.push({ label: 'Telefon', value: phoneValue, classes: ['booking-contact'], data: { type: 'Telefon' } });
+    }
+
+    const meta = createBookingMetaElement(metaEntries);
+    if (meta) {
+      meta.classList.add('my-booking-meta');
+      item.appendChild(meta);
+    }
+
+    const reminder = document.createElement('p');
+    reminder.classList.add('my-booking-reminder');
+    reminder.textContent = 'Bekreft med sikkerhetsspørsmålet for å frigi tiden. Ingen refusjon ved sletting.';
+    item.appendChild(reminder);
+
+    list.appendChild(item);
+  });
+
+  myBookingsListContainer.appendChild(list);
+}
+
+async function fetchMyBookings(email, phone) {
+  const sanitizedEmail = String(email || '').trim();
+  const sanitizedPhone = normalisePhone(phone);
+  const emailLower = sanitizedEmail.toLowerCase();
+  if (!sanitizedEmail || !sanitizedPhone) {
+    return [];
+  }
+  if (!supabaseClient) {
+    return gatherAllKnownBookings().filter((booking) => {
+      const matchesEmail = String(booking.email || '').trim().toLowerCase() === emailLower;
+      const matchesPhone = normalisePhone(booking.phone) === sanitizedPhone;
+      return matchesEmail && matchesPhone;
+    });
+  }
+  const escapedEmail = sanitizedEmail.replace(/[%_]/g, '\\$&');
+  const { data, error } = await supabaseClient
+    .from('bookings')
+    .select('*')
+    .ilike('email', escapedEmail)
+    .gte('date', todayDateString())
+    .order('date', { ascending: true })
+    .order('time', { ascending: true });
+  if (error) {
+    throw error;
+  }
+  return (data || []).filter((booking) => {
+    const matchesEmail = String(booking.email || '').trim().toLowerCase() === emailLower;
+    const matchesPhone = normalisePhone(booking.phone) === sanitizedPhone;
+    return matchesEmail && matchesPhone;
+  });
+}
+
+async function loadMyBookings(reuseCredentials = false, options = {}) {
+  const { silent = false } = options;
+  let email;
+  let phone;
+  if (reuseCredentials && myBookingsCredentials) {
+    email = myBookingsCredentials.email;
+    phone = myBookingsCredentials.phone;
+    if (myBookingsEmailInput) {
+      myBookingsEmailInput.value = email;
+    }
+    if (myBookingsPhoneInput) {
+      myBookingsPhoneInput.value = phone;
+    }
+    myBookingsLoaded = true;
+  } else {
+    email = String(myBookingsEmailInput?.value || '').trim();
+    phone = normalisePhone(myBookingsPhoneInput?.value || '');
+    if (!email || !phone) {
+      updateMyBookingsFeedback('Fyll ut både telefonnummer og e-post for å hente dine bookinger.', 'error');
+      return false;
+    }
+    myBookingsCredentials = { email, phone };
+    if (myBookingsPhoneInput) {
+      myBookingsPhoneInput.value = phone;
+    }
+    myBookingsLoaded = true;
+  }
+
+  if (!silent) {
+    updateMyBookingsFeedback('Henter aktive bookinger …', null);
+  }
+
+  try {
+    const bookings = await fetchMyBookings(email, phone);
+    myBookings = filterActiveBookings(bookings).map((booking) => ({
+      ...booking,
+      lane: normalizeLane(booking.lane)
+    }));
+    renderMyBookings();
+    if (!silent) {
+      if (!myBookings.length) {
+        updateMyBookingsFeedback('Ingen aktive bookinger ble funnet for denne kombinasjonen.', null);
+      } else {
+        updateMyBookingsFeedback(
+          `Fant ${myBookings.length} aktiv${myBookings.length === 1 ? '' : 'e'} booking${
+            myBookings.length === 1 ? '' : 'er'
+          }.`,
+          'success'
+        );
+      }
+    }
+    return true;
+  } catch (error) {
+    console.error('Feil ved henting av bookinger:', error);
+    updateMyBookingsFeedback('Kunne ikke hente bookingene. Kontroller opplysningene og prøv igjen.', 'error');
+    return false;
+  }
+}
+
+function isMyBookingsOpen() {
+  return Boolean(myBookingsOverlay && !myBookingsOverlay.hidden);
+}
+
+async function refreshMyBookingsIfOpen() {
+  if (!isMyBookingsOpen() || !myBookingsCredentials) {
+    return;
+  }
+  await loadMyBookings(true, { silent: true });
+}
+
+function openMyBookingsOverlay() {
+  if (!myBookingsOverlay) {
+    return;
+  }
+  if (!myBookingsOverlay.hidden) {
+    return;
+  }
+  myBookingsOverlay.hidden = false;
+  updateMyBookingsFeedback('', null);
+  renderMyBookings();
+  updateBodyOverlayState();
+  requestAnimationFrame(() => {
+    myBookingsPhoneInput?.focus();
+  });
+}
+
+function closeMyBookingsOverlay() {
+  if (!myBookingsOverlay || myBookingsOverlay.hidden) {
+    return;
+  }
+  myBookingsOverlay.hidden = true;
+  updateBodyOverlayState();
+  myBookingsToggleBtn?.focus();
+}
+
+async function markBookingAsUnused(booking) {
+  if (!booking) {
+    return;
+  }
+  const clubName = String(booking.club || '').trim();
+  const question = clubName
+    ? 'Hva er navnet på klubben du registrerte denne bestillingen på?'
+    : "Skriv SLETT for å bekrefte at du vil frigi tiden.";
+  const answer = window.prompt(
+    `Sikkerhetsspørsmål: ${question}\n\nÅ slette en tid gir ingen refusjon, men frigjør banen for andre lag.`
+  );
+  if (answer == null) {
+    return;
+  }
+  const normalizedAnswer = String(answer).trim().toLowerCase();
+  const expected = clubName ? clubName.toLowerCase() : 'slett';
+  if (normalizedAnswer !== expected) {
+    updateMyBookingsFeedback('Feil svar på sikkerhetsspørsmålet. Tiden er ikke slettet.', 'error');
+    return;
+  }
+
+  updateMyBookingsFeedback('Frigir tiden …', null);
+
+  try {
+    if (supabaseClient) {
+      const { error } = await supabaseClient.from('bookings').delete().eq('id', booking.id);
+      if (error) {
+        throw error;
+      }
+      await refreshCalendarFeed();
+      await loadMonthBookings(currentYear, currentMonth);
+      if (isAdminViewActive()) {
+        if (adminYear === currentYear && adminMonth === currentMonth) {
+          adminBookings = monthBookings.slice();
+        } else {
+          adminBookings = await fetchMonthBookings(adminYear, adminMonth);
+        }
+        renderAdminMonthCalendar();
+        if (adminActiveDate) {
+          loadAdminTimesForDate(adminActiveDate);
+        } else {
+          resetAdminTimesList();
+        }
+      }
+      if (activeDate) {
+        loadTimesForDate(activeDate);
+      } else {
+        renderMonthCalendar();
+      }
+    } else {
+      const matchesBooking = (entry) => {
+        return (
+          entry.date === booking.date &&
+          entry.time === booking.time &&
+          normalizeLane(entry.lane) === normalizeLane(booking.lane) &&
+          String(entry.email || '').trim().toLowerCase() === String(booking.email || '').trim().toLowerCase() &&
+          normalisePhone(entry.phone) === normalisePhone(booking.phone)
+        );
+      };
+      monthBookings = monthBookings.filter((entry) => !matchesBooking(entry));
+      adminBookings = adminBookings.filter((entry) => !matchesBooking(entry));
+      renderMonthCalendar();
+      if (activeDate) {
+        loadTimesForDate(activeDate);
+      }
+    }
+    const refreshed = await loadMyBookings(true, { silent: true });
+    if (refreshed) {
+      updateMyBookingsFeedback('Tiden er slettet og gjort tilgjengelig for andre.', 'success');
+    }
+  } catch (error) {
+    console.error('Kunne ikke slette booking:', error);
+    updateMyBookingsFeedback('Kunne ikke slette tiden. Prøv igjen eller kontakt Finns Fairway.', 'error');
+  }
+}
+
 /**
  * Add a slot to the user's selection.
  * Updates the summary, calendar and times list.
@@ -1121,6 +1501,7 @@ async function submitBooking() {
       }
     }
   }
+  await refreshMyBookingsIfOpen();
   const confirmedSlots = selectedSlots.map((slot) => ({ ...slot }));
   // Clear selection and form
   selectedSlots = [];
@@ -1163,7 +1544,7 @@ function showConfirmation(slots) {
     confirmationTotal.textContent = `Total sum: ${total} kr`;
   }
   confirmationScreen.hidden = false;
-  document.body.classList.add('has-overlay');
+  updateBodyOverlayState();
   if (confirmationBackBtn) {
     confirmationBackBtn.focus();
   }
@@ -1200,7 +1581,7 @@ submitBookingBtn.addEventListener('click', submitBooking);
 if (confirmationBackBtn) {
   confirmationBackBtn.addEventListener('click', () => {
     confirmationScreen.hidden = true;
-    document.body.classList.remove('has-overlay');
+    updateBodyOverlayState();
     confirmationSlotsList.innerHTML = '';
     confirmationTotal.textContent = '';
   });
@@ -1236,6 +1617,7 @@ function startCalendarPolling() {
     } catch (e) {
       console.debug('Polling-feil (ignoreres):', e?.message || e);
     }
+    await refreshMyBookingsIfOpen();
   }, POLL_INTERVAL_MS);
 }
 
@@ -1260,6 +1642,7 @@ document.addEventListener('visibilitychange', async () => {
         resetAdminTimesList();
       }
     }
+    await refreshMyBookingsIfOpen();
   }
 });
 
@@ -1324,7 +1707,7 @@ function closeAdminView() {
   loginForm?.reset();
   loginUsernameInput.value = '';
   loginPasswordInput.value = '';
-  document.body.classList.remove('has-overlay');
+  updateBodyOverlayState();
   if (activeDate) {
     loadTimesForDate(activeDate);
   } else {
@@ -1357,7 +1740,7 @@ async function processLogin() {
   if (loginOverlay) {
     loginOverlay.hidden = true;
   }
-  document.body.classList.remove('has-overlay');
+  updateBodyOverlayState();
   if (publicPage) {
     publicPage.hidden = true;
   }
@@ -1376,7 +1759,7 @@ async function processLogin() {
     if (loginOverlay) {
       loginOverlay.hidden = false;
     }
-    document.body.classList.add('has-overlay');
+    updateBodyOverlayState();
     if (publicPage) {
       publicPage.hidden = false;
     }
@@ -1399,6 +1782,25 @@ if (loginForm) {
   });
 }
 
+if (myBookingsForm) {
+  myBookingsForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await loadMyBookings(false);
+  });
+}
+
+if (myBookingsToggleBtn) {
+  myBookingsToggleBtn.addEventListener('click', () => {
+    openMyBookingsOverlay();
+  });
+}
+
+if (myBookingsCloseBtn) {
+  myBookingsCloseBtn.addEventListener('click', () => {
+    closeMyBookingsOverlay();
+  });
+}
+
 if (loginToggleBtn) {
   loginToggleBtn.addEventListener('click', () => {
     if (loginForm) {
@@ -1410,7 +1812,7 @@ if (loginToggleBtn) {
     if (loginOverlay) {
       loginOverlay.hidden = false;
     }
-    document.body.classList.add('has-overlay');
+    updateBodyOverlayState();
     loginUsernameInput?.focus();
   });
 }
@@ -1426,7 +1828,7 @@ if (loginCancelBtn) {
     if (loginErrorBox) {
       loginErrorBox.textContent = '';
     }
-    document.body.classList.remove('has-overlay');
+    updateBodyOverlayState();
     loginToggleBtn?.focus();
   });
 }
@@ -1473,6 +1875,8 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     if (loginOverlay && !loginOverlay.hidden) {
       loginCancelBtn?.click();
+    } else if (isMyBookingsOpen()) {
+      closeMyBookingsOverlay();
     } else if (isAdminViewActive()) {
       closeAdminView();
     }
