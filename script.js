@@ -374,22 +374,185 @@ function formatGenderLabel(value) {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
+const SEASON_START_MONTH = 10; // November (0-indexed)
+const SEASON_END_MONTH = 2; // March (0-indexed)
+
+let seasonMonths = [];
+let seasonMonthIndex = 0;
+let adminSeasonMonthIndex = 0;
+let currentYear = 0;
+let currentMonth = 0;
+let adminYear = 0;
+let adminMonth = 0;
+let activeDate = null;
+let adminActiveDate = null;
+
+function computeSeasonStartYear(referenceDate = new Date()) {
+  const year = referenceDate.getFullYear();
+  const month = referenceDate.getMonth();
+  if (month >= SEASON_START_MONTH) {
+    return year;
+  }
+  if (month <= SEASON_END_MONTH) {
+    return year - 1;
+  }
+  return year;
+}
+
+function buildSeasonMonths(referenceDate = new Date()) {
+  const startYear = computeSeasonStartYear(referenceDate);
+  return [
+    { year: startYear, month: SEASON_START_MONTH },
+    { year: startYear, month: SEASON_START_MONTH + 1 },
+    { year: startYear + 1, month: 0 },
+    { year: startYear + 1, month: 1 },
+    { year: startYear + 1, month: 2 }
+  ];
+}
+
+function findSeasonMonthIndex(year, month, monthsList = seasonMonths) {
+  if (!Array.isArray(monthsList)) {
+    return -1;
+  }
+  return monthsList.findIndex((entry) => entry.year === year && entry.month === month);
+}
+
+function selectSeasonMonth(index) {
+  if (!Array.isArray(seasonMonths) || seasonMonths.length === 0) {
+    seasonMonthIndex = 0;
+    return;
+  }
+  const clampedIndex = Math.min(Math.max(index, 0), seasonMonths.length - 1);
+  seasonMonthIndex = clampedIndex;
+  const entry = seasonMonths[clampedIndex];
+  currentYear = entry.year;
+  currentMonth = entry.month;
+}
+
+function selectAdminSeasonMonth(index) {
+  if (!Array.isArray(seasonMonths) || seasonMonths.length === 0) {
+    adminSeasonMonthIndex = 0;
+    return;
+  }
+  const clampedIndex = Math.min(Math.max(index, 0), seasonMonths.length - 1);
+  adminSeasonMonthIndex = clampedIndex;
+  const entry = seasonMonths[clampedIndex];
+  adminYear = entry.year;
+  adminMonth = entry.month;
+}
+
+function getSeasonStartDate() {
+  if (!seasonMonths.length) {
+    return null;
+  }
+  const first = seasonMonths[0];
+  return new Date(first.year, first.month, 1);
+}
+
+function getSeasonEndDate() {
+  if (!seasonMonths.length) {
+    return null;
+  }
+  const last = seasonMonths[seasonMonths.length - 1];
+  return new Date(last.year, last.month + 1, 0);
+}
+
+function isDateWithinSeasonRange(date) {
+  if (!(date instanceof Date)) {
+    return false;
+  }
+  const seasonStart = getSeasonStartDate();
+  const seasonEnd = getSeasonEndDate();
+  if (!seasonStart || !seasonEnd) {
+    return false;
+  }
+  const endBoundary = new Date(
+    seasonEnd.getFullYear(),
+    seasonEnd.getMonth(),
+    seasonEnd.getDate(),
+    23,
+    59,
+    59,
+    999
+  );
+  return date.getTime() >= seasonStart.getTime() && date.getTime() <= endBoundary.getTime();
+}
+
+function isDateWithinSeasonString(dateStr) {
+  if (!dateStr) {
+    return false;
+  }
+  const parts = dateStr.split('-').map((part) => Number(part));
+  if (parts.length < 3 || parts.some((part) => Number.isNaN(part))) {
+    return false;
+  }
+  const [year, month, day] = parts;
+  return isDateWithinSeasonRange(new Date(year, month - 1, day));
+}
+
+function formatDateFromParts(year, monthIndex, day) {
+  return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function formatDateToISO(date) {
+  if (!(date instanceof Date)) {
+    return '';
+  }
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate()
+  ).padStart(2, '0')}`;
+}
+
+function recalculateSeason(referenceDate = new Date()) {
+  const previousPublic = { year: currentYear, month: currentMonth };
+  const previousAdmin = { year: adminYear, month: adminMonth };
+  const previousActiveDate = activeDate;
+  const previousAdminActive = adminActiveDate;
+
+  const nextSeasonMonths = buildSeasonMonths(referenceDate);
+  seasonMonths = nextSeasonMonths;
+
+  let newPublicIndex = findSeasonMonthIndex(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth(),
+    nextSeasonMonths
+  );
+  if (newPublicIndex === -1) {
+    newPublicIndex = findSeasonMonthIndex(previousPublic.year, previousPublic.month, nextSeasonMonths);
+  }
+  if (newPublicIndex === -1) {
+    newPublicIndex = 0;
+  }
+  selectSeasonMonth(newPublicIndex);
+
+  let newAdminIndex = findSeasonMonthIndex(previousAdmin.year, previousAdmin.month, nextSeasonMonths);
+  if (newAdminIndex === -1) {
+    newAdminIndex = seasonMonthIndex;
+  }
+  selectAdminSeasonMonth(newAdminIndex);
+
+  if (previousActiveDate && !isDateWithinSeasonString(previousActiveDate)) {
+    const defaultDate = formatDateFromParts(currentYear, currentMonth, 1);
+    activeDate = defaultDate;
+  }
+  if (previousAdminActive && !isDateWithinSeasonString(previousAdminActive)) {
+    const defaultAdminDate = formatDateFromParts(adminYear, adminMonth, 1);
+    adminActiveDate = defaultAdminDate;
+  }
+}
+
 // Booking application state
 const priceFull = 1990;
 const priceHalf = 1490;
 let selectedSlots = []; // { date, time, lane }
 let monthBookings = []; // bookings loaded for the current month
-let currentYear = new Date().getFullYear();
-let currentMonth = new Date().getMonth();
-let activeDate = null;
 let adminBookings = [];
-let adminYear = currentYear;
-let adminMonth = currentMonth;
-let adminActiveDate = null;
 let myBookings = [];
 let myBookingsCredentials = null;
 let myBookingsLoaded = false;
 const MY_BOOKINGS_LOOKAHEAD_MONTHS = 36; // look ahead up to three years for self-service searches
+
+recalculateSeason();
 
 function isAdminViewActive() {
   return Boolean(isAuthenticated && adminPanel && !adminPanel.hidden);
@@ -664,6 +827,10 @@ async function fetchMonthBookings(year, month) {
 }
 
 async function loadMonthBookings(year, month) {
+  const seasonIndex = findSeasonMonthIndex(year, month);
+  if (seasonIndex !== -1) {
+    selectSeasonMonth(seasonIndex);
+  }
   monthBookings = await fetchMonthBookings(year, month);
 }
 
@@ -731,12 +898,26 @@ function calculateTimeAvailability(dateStr, time, bookings, includeSelections) {
   return Math.max(0, 2 - occupied);
 }
 
+function updateMonthNavButtons() {
+  if (prevMonthBtn) {
+    const atStart = seasonMonthIndex <= 0;
+    prevMonthBtn.disabled = atStart;
+    prevMonthBtn.setAttribute('aria-disabled', atStart ? 'true' : 'false');
+  }
+  if (nextMonthBtn) {
+    const atEnd = seasonMonthIndex >= seasonMonths.length - 1;
+    nextMonthBtn.disabled = atEnd;
+    nextMonthBtn.setAttribute('aria-disabled', atEnd ? 'true' : 'false');
+  }
+}
+
 /**
  * Render the month calendar grid.
  * Each day cell is colour-coded based on occupancy and clickable to load times.
  */
 function renderMonthCalendar() {
   monthCalendar.innerHTML = '';
+  updateMonthNavButtons();
   const monthNames = [
     'Januar','Februar','Mars','April','Mai','Juni',
     'Juli','August','September','Oktober','November','Desember'
@@ -1027,9 +1208,23 @@ function isDateInMonth(dateStr, year, month) {
   return y === year && m === month + 1;
 }
 
+function updateAdminMonthNavButtons() {
+  if (adminPrevMonthBtn) {
+    const atStart = adminSeasonMonthIndex <= 0;
+    adminPrevMonthBtn.disabled = atStart;
+    adminPrevMonthBtn.setAttribute('aria-disabled', atStart ? 'true' : 'false');
+  }
+  if (adminNextMonthBtn) {
+    const atEnd = adminSeasonMonthIndex >= seasonMonths.length - 1;
+    adminNextMonthBtn.disabled = atEnd;
+    adminNextMonthBtn.setAttribute('aria-disabled', atEnd ? 'true' : 'false');
+  }
+}
+
 function renderAdminMonthCalendar() {
   if (!adminMonthCalendar || !adminMonthLabel) return;
   adminMonthCalendar.innerHTML = '';
+  updateAdminMonthNavButtons();
   const monthNames = [
     'Januar',
     'Februar',
@@ -1248,6 +1443,10 @@ function loadAdminTimesForDate(dateStr) {
 async function loadAdminMonth(year, month) {
   adminYear = year;
   adminMonth = month;
+  const seasonIndex = findSeasonMonthIndex(year, month);
+  if (seasonIndex !== -1) {
+    adminSeasonMonthIndex = seasonIndex;
+  }
   if (adminYear === currentYear && adminMonth === currentMonth) {
     adminBookings = monthBookings.slice();
   } else {
@@ -1829,24 +2028,20 @@ function showConfirmation(slots) {
 
 // Event listeners for month navigation and booking submission
 prevMonthBtn.addEventListener('click', async () => {
-  if (currentMonth === 0) {
-    currentMonth = 11;
-    currentYear -= 1;
-  } else {
-    currentMonth -= 1;
+  if (seasonMonthIndex <= 0) {
+    return;
   }
+  selectSeasonMonth(seasonMonthIndex - 1);
   await loadMonthBookings(currentYear, currentMonth);
   activeDate = null;
   renderMonthCalendar();
   timesList.innerHTML = '';
 });
 nextMonthBtn.addEventListener('click', async () => {
-  if (currentMonth === 11) {
-    currentMonth = 0;
-    currentYear += 1;
-  } else {
-    currentMonth += 1;
+  if (seasonMonthIndex >= seasonMonths.length - 1) {
+    return;
   }
+  selectSeasonMonth(seasonMonthIndex + 1);
   await loadMonthBookings(currentYear, currentMonth);
   activeDate = null;
   renderMonthCalendar();
@@ -1872,6 +2067,7 @@ function startCalendarPolling() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
     try {
+      recalculateSeason(new Date());
       await loadMonthBookings(currentYear, currentMonth);
       if (activeDate) {
         loadTimesForDate(activeDate);
@@ -1900,6 +2096,7 @@ function startCalendarPolling() {
 
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible') {
+    recalculateSeason(new Date());
     await loadMonthBookings(currentYear, currentMonth);
     if (activeDate) {
       loadTimesForDate(activeDate);
@@ -1924,8 +2121,7 @@ document.addEventListener('visibilitychange', async () => {
 });
 
 function todayDateString() {
-  const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  return formatDateToISO(new Date());
 }
 
 async function initBooking() {
@@ -1935,12 +2131,13 @@ async function initBooking() {
   bookingInitialised = true;
   try {
     const today = new Date();
-    currentYear = today.getFullYear();
-    currentMonth = today.getMonth();
+    recalculateSeason(today);
     await loadMonthBookings(currentYear, currentMonth);
     await refreshCalendarFeed();
-    const todayStr = todayDateString();
-    loadTimesForDate(todayStr);
+    const initialDate = isDateWithinSeasonRange(today)
+      ? formatDateToISO(today)
+      : formatDateFromParts(currentYear, currentMonth, 1);
+    loadTimesForDate(initialDate);
     startCalendarPolling();
   } catch (error) {
     bookingInitialised = false;
@@ -1951,14 +2148,22 @@ async function initBooking() {
 
 async function initAdminView() {
   const today = new Date();
-  adminYear = today.getFullYear();
-  adminMonth = today.getMonth();
-  const todayStr = todayDateString();
-  adminActiveDate = todayStr;
+  const todayIndex = findSeasonMonthIndex(today.getFullYear(), today.getMonth());
+  if (todayIndex !== -1) {
+    selectAdminSeasonMonth(todayIndex);
+    adminActiveDate = formatDateToISO(today);
+  } else {
+    selectAdminSeasonMonth(seasonMonthIndex);
+    adminActiveDate = formatDateFromParts(adminYear, adminMonth, 1);
+  }
   await loadAdminMonth(adminYear, adminMonth);
-  if (!adminActiveDate) {
-    adminActiveDate = todayStr;
+  if (!adminActiveDate || !isDateInMonth(adminActiveDate, adminYear, adminMonth)) {
+    adminActiveDate = formatDateFromParts(adminYear, adminMonth, 1);
+  }
+  if (adminActiveDate) {
     loadAdminTimesForDate(adminActiveDate);
+  } else {
+    resetAdminTimesList();
   }
   if (adminPanel) {
     adminPanel.scrollTop = 0;
@@ -2118,24 +2323,20 @@ if (adminCloseBtn) {
 
 if (adminPrevMonthBtn) {
   adminPrevMonthBtn.addEventListener('click', async () => {
-    if (adminMonth === 0) {
-      adminMonth = 11;
-      adminYear -= 1;
-    } else {
-      adminMonth -= 1;
+    if (adminSeasonMonthIndex <= 0) {
+      return;
     }
+    selectAdminSeasonMonth(adminSeasonMonthIndex - 1);
     await loadAdminMonth(adminYear, adminMonth);
   });
 }
 
 if (adminNextMonthBtn) {
   adminNextMonthBtn.addEventListener('click', async () => {
-    if (adminMonth === 11) {
-      adminMonth = 0;
-      adminYear += 1;
-    } else {
-      adminMonth += 1;
+    if (adminSeasonMonthIndex >= seasonMonths.length - 1) {
+      return;
     }
+    selectAdminSeasonMonth(adminSeasonMonthIndex + 1);
     await loadAdminMonth(adminYear, adminMonth);
   });
 }
