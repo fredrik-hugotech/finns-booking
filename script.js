@@ -1275,6 +1275,93 @@ function updateMyBookingsFeedback(message, type) {
   }
 }
 
+function buildCancellationMailto(booking) {
+  const baseEmail = 'post@finnsfairway.no';
+  if (!booking) {
+    return `mailto:${baseEmail}`;
+  }
+
+  const laneType = normalizeLane(booking.lane);
+  const laneLabel = laneType === 'full' ? 'Full bane' : laneType === 'half' ? 'Halv bane' : String(booking.lane || '');
+  const dateLabel = formatDateLabel(booking.date);
+  const fullDateLabel = formatDateWithYear(booking.date);
+  const timeLabel = formatTimeInterval(booking.time);
+
+  const subjectParts = ['Kansellering'];
+  if (dateLabel) {
+    subjectParts.push(dateLabel);
+  }
+  if (timeLabel) {
+    subjectParts.push(timeLabel);
+  }
+
+  const bodyLines = [
+    'Hei Finns Fairway,',
+    '',
+    'Jeg ønsker å kansellere følgende booking:',
+  ];
+
+  if (fullDateLabel) {
+    bodyLines.push(`Dato: ${fullDateLabel}`);
+  }
+  if (timeLabel) {
+    bodyLines.push(`Tid: ${timeLabel}`);
+  }
+  if (laneLabel) {
+    bodyLines.push(`Bane: ${laneLabel}`);
+  }
+
+  const nameValue = String(booking.name ?? '').trim();
+  if (nameValue) {
+    bodyLines.push(`Navn: ${nameValue}`);
+  }
+  const clubValue = String(booking.club ?? '').trim();
+  if (clubValue) {
+    bodyLines.push(`Klubb: ${clubValue}`);
+  }
+  const genderValue = String(booking.gender ?? '').trim();
+  if (genderValue) {
+    bodyLines.push(`Kjønn: ${formatGenderLabel(genderValue)}`);
+  }
+  const ageValue = String(booking.age ?? '').trim();
+  if (ageValue) {
+    bodyLines.push(`Årskull: ${ageValue}`);
+  }
+  const emailValue = String(booking.email ?? '').trim();
+  if (emailValue) {
+    bodyLines.push(`E-post: ${emailValue}`);
+  }
+  const phoneValue = String(booking.phone ?? '').trim();
+  if (phoneValue) {
+    bodyLines.push(`Telefon: ${phoneValue}`);
+  }
+
+  bodyLines.push('', 'Jeg er kjent med at kanselleringen ikke gir refusjon, men frigjør banen for andre lag.', '', 'Mvh');
+
+  const subject = encodeURIComponent(subjectParts.filter(Boolean).join(' – '));
+  const body = encodeURIComponent(bodyLines.join('\n'));
+  return `mailto:${baseEmail}?subject=${subject}&body=${body}`;
+}
+
+function formatDateWithYear(dateStr) {
+  if (!dateStr) {
+    return '';
+  }
+  const [year, month, day] = String(dateStr)
+    .split('-')
+    .map((part) => Number(part));
+  if ([year, month, day].some((value) => Number.isNaN(value))) {
+    return '';
+  }
+  const date = new Date(year, month - 1, day);
+  return date.toLocaleDateString('nb-NO', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+}
+
 function renderMyBookings() {
   if (!myBookingsListContainer) return;
   myBookingsListContainer.innerHTML = '';
@@ -1305,13 +1392,11 @@ function renderMyBookings() {
     title.textContent = `${formatDateLabel(booking.date)} kl ${formatTimeInterval(booking.time)} – ${laneLabel}`;
     header.appendChild(title);
 
-    const actionBtn = document.createElement('button');
-    actionBtn.type = 'button';
+    const actionBtn = document.createElement('a');
     actionBtn.classList.add('my-booking-action');
-    actionBtn.textContent = 'Ubenyttet tid';
-    actionBtn.addEventListener('click', () => {
-      markBookingAsUnused(booking);
-    });
+    actionBtn.textContent = 'Send kansellering';
+    actionBtn.href = buildCancellationMailto(booking);
+    actionBtn.rel = 'noopener noreferrer';
     header.appendChild(actionBtn);
 
     item.appendChild(header);
@@ -1350,7 +1435,7 @@ function renderMyBookings() {
 
     const reminder = document.createElement('p');
     reminder.classList.add('my-booking-reminder');
-    reminder.textContent = 'Bekreft med sikkerhetsspørsmålet for å frigi tiden. Ingen refusjon ved sletting.';
+    reminder.textContent = 'Send kanselleringen for å frigjøre banen for andre. Ingen refusjon ved kansellering.';
     item.appendChild(reminder);
 
     list.appendChild(item);
@@ -1529,97 +1614,6 @@ function closeMyBookingsOverlay() {
   myBookingsOverlay.hidden = true;
   updateBodyOverlayState();
   myBookingsToggleBtn?.focus();
-}
-
-async function markBookingAsUnused(booking) {
-  if (!booking) {
-    return;
-  }
-  const clubName = String(booking.club || '').trim();
-  const question = clubName
-    ? 'Hva er navnet på klubben du registrerte denne bestillingen på?'
-    : "Skriv SLETT for å bekrefte at du vil frigi tiden.";
-  const answer = window.prompt(
-    `Sikkerhetsspørsmål: ${question}\n\nÅ slette en tid gir ingen refusjon, men frigjør banen for andre lag.`
-  );
-  if (answer == null) {
-    return;
-  }
-  const normalizedAnswer = String(answer).trim().toLowerCase();
-  const expected = clubName ? clubName.toLowerCase() : 'slett';
-  if (normalizedAnswer !== expected) {
-    updateMyBookingsFeedback('Feil svar på sikkerhetsspørsmålet. Tiden er ikke slettet.', 'error');
-    return;
-  }
-
-  updateMyBookingsFeedback('Frigir tiden …', null);
-
-  try {
-    if (supabaseClient) {
-      let deleteResult = { data: null };
-      if (booking.id != null) {
-        deleteResult = await supabaseClient
-          .from('bookings')
-          .delete()
-          .eq('id', booking.id)
-          .select('id');
-        if (deleteResult.error) {
-          throw deleteResult.error;
-        }
-      }
-
-      if (!deleteResult.data || deleteResult.data.length === 0) {
-        const fallbackResult = await deleteBookingByIdentity(booking);
-        if (!fallbackResult || !fallbackResult.data || !fallbackResult.data.length) {
-          throw new Error('Fant ingen tilhørende booking å slette.');
-        }
-        deleteResult = fallbackResult;
-      }
-      await refreshCalendarFeed();
-      await loadMonthBookings(currentYear, currentMonth);
-      if (isAdminViewActive()) {
-        if (adminYear === currentYear && adminMonth === currentMonth) {
-          adminBookings = monthBookings.slice();
-        } else {
-          adminBookings = await fetchMonthBookings(adminYear, adminMonth);
-        }
-        renderAdminMonthCalendar();
-        if (adminActiveDate) {
-          loadAdminTimesForDate(adminActiveDate);
-        } else {
-          resetAdminTimesList();
-        }
-      }
-      if (activeDate) {
-        loadTimesForDate(activeDate);
-      } else {
-        renderMonthCalendar();
-      }
-    } else {
-      const matchesBooking = (entry) => {
-        return (
-          entry.date === booking.date &&
-          entry.time === booking.time &&
-          normalizeLane(entry.lane) === normalizeLane(booking.lane) &&
-          String(entry.email || '').trim().toLowerCase() === String(booking.email || '').trim().toLowerCase() &&
-          phonesMatch(entry.phone, booking.phone)
-        );
-      };
-      monthBookings = monthBookings.filter((entry) => !matchesBooking(entry));
-      adminBookings = adminBookings.filter((entry) => !matchesBooking(entry));
-      renderMonthCalendar();
-      if (activeDate) {
-        loadTimesForDate(activeDate);
-      }
-    }
-    const refreshed = await loadMyBookings(true, { silent: true });
-    if (refreshed) {
-      updateMyBookingsFeedback('Tiden er slettet og gjort tilgjengelig for andre.', 'success');
-    }
-  } catch (error) {
-    console.error('Kunne ikke slette booking:', error);
-    updateMyBookingsFeedback('Kunne ikke slette tiden. Prøv igjen eller kontakt Finns Fairway.', 'error');
-  }
 }
 
 /**

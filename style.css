@@ -225,6 +225,9 @@ body.auth-locked {
 }
 
 .my-booking-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: 999px;
   background: linear-gradient(120deg, #c62828, #f4511e);
@@ -233,6 +236,7 @@ body.auth-locked {
   padding: 0.5rem 1.4rem;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  text-decoration: none;
 }
 
 .my-booking-action:hover,
