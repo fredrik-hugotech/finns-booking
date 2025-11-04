@@ -107,17 +107,6 @@ function extractPhoneDigits(value) {
     .replace(/\D+/g, '');
 }
 
-function getComparablePhoneDigits(value) {
-  const digits = extractPhoneDigits(value);
-  if (!digits) {
-    return '';
-  }
-  if (digits.length > 8) {
-    return digits.slice(-8);
-  }
-  return digits;
-}
-
 function phonesMatch(a, b) {
   const digitsA = extractPhoneDigits(a);
   const digitsB = extractPhoneDigits(b);
@@ -128,13 +117,6 @@ function phonesMatch(a, b) {
     return true;
   }
   return digitsA.endsWith(digitsB) || digitsB.endsWith(digitsA);
-}
-
-function buildPhoneSearchPattern(phone) {
-  const comparableDigits = getComparablePhoneDigits(phone);
-  if (!comparableDigits) return null;
-  const characters = comparableDigits.split('');
-  return `%${characters.join('%')}%`;
 }
 
 function getBookingDateTime(booking) {
@@ -237,6 +219,7 @@ let adminActiveDate = null;
 let myBookings = [];
 let myBookingsCredentials = null;
 let myBookingsLoaded = false;
+const MY_BOOKINGS_LOOKAHEAD_MONTHS = 36; // look ahead up to three years for self-service searches
 
 function isAdminViewActive() {
   return Boolean(isAuthenticated && adminPanel && !adminPanel.hidden);
@@ -1187,43 +1170,73 @@ async function fetchMyBookings(email, phone) {
   if (!hasEmail && !hasPhone) {
     return [];
   }
+
   const emailLower = sanitizedEmail.toLowerCase();
-  if (!supabaseClient) {
-    return gatherAllKnownBookings().filter((booking) => {
-      const matchesEmail = hasEmail
-        ? String(booking.email || '').trim().toLowerCase() === emailLower
-        : false;
-      const matchesPhone = hasPhone ? phonesMatch(booking.phone, sanitizedPhone) : false;
-      return (hasEmail && matchesEmail) || (hasPhone && matchesPhone);
-    });
-  }
-  const escapedEmail = sanitizedEmail.replace(/[%_]/g, '\\$&');
-  const phonePattern = buildPhoneSearchPattern(sanitizedPhone) || sanitizedPhone;
-  let query = supabaseClient.from('bookings').select('*').gte('date', todayDateString());
-  if (hasEmail && hasPhone) {
-    const orFilters = [];
-    orFilters.push(`email.ilike.${escapedEmail}`);
-    if (phonePattern) {
-      orFilters.push(`phone.ilike.${phonePattern}`);
+  const matchesFilter = (booking) => {
+    if (!booking) {
+      return false;
     }
-    query = query.or(orFilters.join(','));
-  } else if (hasEmail) {
-    query = query.ilike('email', escapedEmail);
-  } else if (hasPhone && phonePattern) {
-    query = query.ilike('phone', phonePattern);
-  }
-  query = query.order('date', { ascending: true }).order('time', { ascending: true });
-  const { data, error } = await query;
-  if (error) {
-    throw error;
-  }
-  return (data || []).filter((booking) => {
     const matchesEmail = hasEmail
       ? String(booking.email || '').trim().toLowerCase() === emailLower
       : false;
     const matchesPhone = hasPhone ? phonesMatch(booking.phone, sanitizedPhone) : false;
     return (hasEmail && matchesEmail) || (hasPhone && matchesPhone);
+  };
+
+  if (!supabaseClient) {
+    return gatherAllKnownBookings().filter(matchesFilter);
+  }
+
+  const baseDate = new Date();
+  const startYear = baseDate.getFullYear();
+  const startMonth = baseDate.getMonth();
+  const monthPromises = [];
+  const monthKeys = new Set();
+
+  for (let offset = 0; offset <= MY_BOOKINGS_LOOKAHEAD_MONTHS; offset += 1) {
+    const target = new Date(startYear, startMonth + offset, 1);
+    const year = target.getFullYear();
+    const month = target.getMonth();
+    const key = `${year}-${month}`;
+    if (monthKeys.has(key)) {
+      continue;
+    }
+    monthKeys.add(key);
+
+    if (year === currentYear && month === currentMonth) {
+      monthPromises.push(Promise.resolve(monthBookings.slice()));
+    } else if (adminBookings.length && year === adminYear && month === adminMonth) {
+      monthPromises.push(Promise.resolve(adminBookings.slice()));
+    } else {
+      monthPromises.push(fetchMonthBookings(year, month));
+    }
+  }
+
+  const monthResults = await Promise.all(monthPromises);
+  const collected = [];
+  const seen = new Set();
+
+  monthResults.forEach((monthData) => {
+    (monthData || []).forEach((booking) => {
+      if (!matchesFilter(booking)) {
+        return;
+      }
+      const key =
+        booking.id != null
+          ? `id:${booking.id}`
+          : `${booking.date}|${booking.time}|${booking.name}|${booking.phone}|${booking.email}|${booking.lane}`;
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      collected.push({
+        ...booking,
+        lane: normalizeLane(booking.lane)
+      });
+    });
   });
+
+  return collected;
 }
 
 async function loadMyBookings(reuseCredentials = false, options = {}) {
