@@ -48,6 +48,7 @@ const CALENDAR_BUCKET = 'booking-calendar';
 const CALENDAR_FILENAME = 'bookings.ics';
 let calendarSignedUrl = null;
 let calendarBucketEnsured = false;
+let calendarStorageDisabled = false;
 
 // Define the standard time slots (24‑hour format) you wish to offer.
 const availableTimes = [
@@ -293,7 +294,9 @@ function formatICSDateTimeUTC(dateObj) {
 }
 
 async function ensureCalendarBucket() {
-  if (calendarBucketEnsured || !supabaseClient) return calendarBucketEnsured;
+  if (calendarBucketEnsured || calendarStorageDisabled || !supabaseClient) {
+    return calendarBucketEnsured;
+  }
   try {
     const { data, error } = await supabaseClient.storage.getBucket(CALENDAR_BUCKET);
     if (data && !error) {
@@ -307,13 +310,33 @@ async function ensureCalendarBucket() {
     const { error: createError } = await supabaseClient.storage.createBucket(CALENDAR_BUCKET, {
       public: false
     });
-    if (createError && !String(createError.message || createError).includes('exists')) {
-      console.error('Feil ved opprettelse av kalenderbøtte:', createError);
-      return false;
+    if (createError) {
+      const message = String(createError.message || createError).toLowerCase();
+      const blockedByPolicy =
+        message.includes('row-level security') ||
+        message.includes('not authorized') ||
+        message.includes('permission');
+      if (!message.includes('exists')) {
+        if (blockedByPolicy) {
+          console.info(
+            'Manglende rettigheter til å opprette kalenderbøtte. Hopper over kalenderfeed.'
+          );
+          calendarStorageDisabled = true;
+        } else {
+          console.error('Feil ved opprettelse av kalenderbøtte:', createError);
+        }
+        return false;
+      }
     }
     calendarBucketEnsured = true;
     return true;
   } catch (err) {
+    const message = String(err?.message || err).toLowerCase();
+    if (message.includes('row-level security') || message.includes('permission')) {
+      console.info('Manglende rettigheter til å opprette kalenderbøtte. Hopper over kalenderfeed.');
+      calendarStorageDisabled = true;
+      return false;
+    }
     console.error('Uventet feil ved opprettelse av kalenderbøtte:', err);
     return false;
   }
@@ -389,6 +412,9 @@ function generateCalendarFeed(bookings) {
 
 async function refreshCalendarFeed() {
   if (!supabaseClient) return;
+  if (calendarStorageDisabled) {
+    return;
+  }
   try {
     const { data, error } = await supabaseClient
       .from('bookings')
@@ -406,7 +432,9 @@ async function refreshCalendarFeed() {
     const icsContent = generateCalendarFeed(normalized);
     const bucketReady = await ensureCalendarBucket();
     if (!bucketReady) {
-      console.warn('Kalenderbøtte ikke klar, hopper over oppdatering.');
+      if (!calendarStorageDisabled) {
+        console.warn('Kalenderbøtte ikke klar, hopper over oppdatering.');
+      }
       return;
     }
     const blob = new Blob([icsContent], { type: 'text/calendar' });
