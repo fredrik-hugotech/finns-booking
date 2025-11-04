@@ -374,9 +374,6 @@ function formatGenderLabel(value) {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
-const SEASON_START_MONTH = 10; // November (0-indexed)
-const SEASON_END_MONTH = 2; // March (0-indexed)
-
 let seasonMonths = [];
 let seasonMonthIndex = 0;
 let adminSeasonMonthIndex = 0;
@@ -387,26 +384,12 @@ let adminMonth = 0;
 let activeDate = null;
 let adminActiveDate = null;
 
-function computeSeasonStartYear(referenceDate = new Date()) {
-  const year = referenceDate.getFullYear();
-  const month = referenceDate.getMonth();
-  if (month >= SEASON_START_MONTH) {
-    return year;
-  }
-  if (month <= SEASON_END_MONTH) {
-    return year - 1;
-  }
-  return year;
-}
-
-function buildSeasonMonths(referenceDate = new Date()) {
-  const startYear = computeSeasonStartYear(referenceDate);
+function buildSeasonMonths() {
   return [
-    { year: startYear, month: SEASON_START_MONTH },
-    { year: startYear, month: SEASON_START_MONTH + 1 },
-    { year: startYear + 1, month: 0 },
-    { year: startYear + 1, month: 1 },
-    { year: startYear + 1, month: 2 }
+    { year: 2025, month: 11 },
+    { year: 2026, month: 0 },
+    { year: 2026, month: 1 },
+    { year: 2026, month: 2 }
   ];
 }
 
@@ -509,7 +492,7 @@ function recalculateSeason(referenceDate = new Date()) {
   const previousActiveDate = activeDate;
   const previousAdminActive = adminActiveDate;
 
-  const nextSeasonMonths = buildSeasonMonths(referenceDate);
+  const nextSeasonMonths = buildSeasonMonths();
   seasonMonths = nextSeasonMonths;
 
   let newPublicIndex = findSeasonMonthIndex(
