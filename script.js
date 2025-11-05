@@ -73,7 +73,8 @@ const availableTimes = [
   '18:00',
   '19:00',
   '20:00',
-  '21:00'
+  '21:00',
+  '22:00'
 ];
 
 function formatTimeInterval(startTime) {
