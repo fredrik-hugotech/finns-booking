@@ -25,6 +25,7 @@ body {
   font-family: var(--font-family);
   background: linear-gradient(135deg, var(--sand-50) 0%, var(--sand-100) 40%, #ffffff 100%);
   color: var(--text-dark);
+  min-height: 100vh;
 }
 
 body.auth-locked {
@@ -55,7 +56,7 @@ body.auth-locked {
   position: fixed;
   inset: 0;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   padding: clamp(1.5rem, 5vw, 3rem);
   background: linear-gradient(135deg, rgba(0, 56, 44, 0.88), rgba(0, 121, 92, 0.82));
@@ -77,6 +78,9 @@ body.auth-locked {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  max-height: min(92vh, 720px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .my-bookings-header {
@@ -160,6 +164,13 @@ body.auth-locked {
   transform: translateY(-1px);
   box-shadow: 0 12px 25px rgba(0, 56, 44, 0.22);
   outline: none;
+}
+
+.my-bookings-help {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
 .my-bookings-note {
@@ -918,7 +929,12 @@ main {
   border-radius: 999px;
   cursor: pointer;
   font-weight: 600;
-  transition: background 0.2s ease, transform 0.2s ease;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .time-button:hover:not(:disabled),
@@ -926,6 +942,7 @@ main {
   background: var(--green-900);
   color: var(--white);
   transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(0, 56, 44, 0.18);
 }
 
 .time-button:disabled {
@@ -1328,6 +1345,38 @@ footer {
   font-size: 0.95rem;
 }
 
+@media (max-width: 960px) {
+  main {
+    padding: clamp(0.9rem, 4vw, 1.6rem) clamp(1rem, 4.5vw, 1.8rem) clamp(1.6rem, 5vw, 2.4rem);
+  }
+
+  .hero {
+    padding: clamp(1.1rem, 4.6vw, 1.8rem);
+    margin-bottom: clamp(0.9rem, 4vw, 1.6rem);
+  }
+
+  .hero-content p {
+    max-width: none;
+  }
+
+  .content-grid {
+    gap: clamp(0.75rem, 3vw, 1.4rem);
+  }
+
+  .card {
+    padding: clamp(0.95rem, 3vw, 1.5rem);
+    gap: clamp(1rem, 3vw, 1.25rem);
+  }
+
+  .times-list {
+    gap: 0.55rem;
+  }
+
+  .time-row {
+    padding: 0.5rem clamp(0.5rem, 2vw, 0.7rem);
+  }
+}
+
 @media (max-width: 720px) {
   .admin-panel {
     padding: clamp(0.85rem, 5vw, 1.1rem);
@@ -1336,17 +1385,23 @@ footer {
 
   .site-header {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    text-align: center;
+    gap: clamp(0.6rem, 4vw, 1rem);
   }
 
   .header-inner {
     width: 100%;
-    justify-content: flex-start;
+    justify-content: center;
+    align-items: center;
+    gap: clamp(0.8rem, 3.6vw, 1.4rem);
   }
 
   .header-actions {
     width: 100%;
-    justify-content: flex-start;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: clamp(0.6rem, 3vw, 0.9rem);
   }
 
   .header-my-bookings {
@@ -1359,7 +1414,6 @@ footer {
     width: 100%;
     display: inline-flex;
     justify-content: center;
-    margin-top: 0.5rem;
   }
 
   main {
@@ -1549,6 +1603,11 @@ footer {
     min-height: calc(100vh - clamp(1.2rem, 12vw, 2.4rem));
   }
 
+  .admin-panel-body {
+    padding-right: 0;
+    margin-right: 0;
+  }
+
   .admin-panel-header {
     gap: 0.75rem;
   }
@@ -1573,6 +1632,27 @@ footer {
   .admin-panel-brand {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .my-bookings-card {
+    width: min(100%, 420px);
+    gap: 1.25rem;
+    max-height: none;
+  }
+
+  .my-bookings-header {
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+
+  .my-bookings-close {
+    align-self: stretch;
+    justify-content: center;
+  }
+
+  .my-bookings-help,
+  .my-bookings-note {
+    font-size: 0.9rem;
   }
 
   footer {

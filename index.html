@@ -56,14 +56,28 @@
         <form id="myBookingsForm" class="my-bookings-form" novalidate>
           <div class="form-row">
             <label for="myBookingsPhone">Telefonnummer</label>
-            <input type="tel" id="myBookingsPhone" autocomplete="tel" required />
+            <input
+              type="tel"
+              id="myBookingsPhone"
+              autocomplete="tel"
+              inputmode="tel"
+              aria-describedby="myBookingsHelp"
+            />
           </div>
           <div class="form-row">
             <label for="myBookingsEmail">E-post</label>
-            <input type="email" id="myBookingsEmail" autocomplete="email" required />
+            <input
+              type="email"
+              id="myBookingsEmail"
+              autocomplete="email"
+              aria-describedby="myBookingsHelp"
+            />
           </div>
           <button type="submit" class="my-bookings-submit">Vis mine tider</button>
         </form>
+        <p id="myBookingsHelp" class="my-bookings-help">
+          Du kan fylle ut telefonnummer, e-post eller begge deler. Vi viser alle aktive bookinger som passer.
+        </p>
         <p class="my-bookings-note">
           Å sende en kansellering gir ingen refusjon, men frigjør banen for andre lag hos Finns Fairway.
         </p>

@@ -44,6 +44,14 @@ const publicPage = document.querySelector('.page');
 const adminPanel = document.getElementById('adminPanel');
 const adminCloseBtn = document.getElementById('adminClose');
 
+const FOCUSABLE_SELECTORS =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+let loginOverlayTrigger = null;
+let loginFocusTrapCleanup = null;
+let myBookingsOverlayTrigger = null;
+let myBookingsFocusTrapCleanup = null;
+
 const CALENDAR_BUCKET = 'booking-calendar';
 const CALENDAR_FILENAME = 'bookings.ics';
 let calendarSignedUrl = null;
@@ -578,6 +586,58 @@ function updateBodyOverlayState() {
   } else {
     document.body.classList.remove('has-overlay');
   }
+}
+
+function getFocusableElements(container) {
+  if (!container) {
+    return [];
+  }
+  return Array.from(container.querySelectorAll(FOCUSABLE_SELECTORS)).filter((element) => {
+    if (element.hasAttribute('disabled')) {
+      return false;
+    }
+    if (element.getAttribute('aria-hidden') === 'true') {
+      return false;
+    }
+    return true;
+  });
+}
+
+function activateFocusTrap(container) {
+  const focusableElements = getFocusableElements(container);
+  if (!focusableElements.length) {
+    return () => {};
+  }
+  const firstElement = focusableElements[0];
+  const lastElement = focusableElements[focusableElements.length - 1];
+
+  const handleKeydown = (event) => {
+    if (event.key !== 'Tab') {
+      return;
+    }
+    if (focusableElements.length === 1) {
+      event.preventDefault();
+      firstElement.focus();
+      return;
+    }
+    if (event.shiftKey) {
+      if (document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      }
+      return;
+    }
+    if (document.activeElement === lastElement) {
+      event.preventDefault();
+      firstElement.focus();
+    }
+  };
+
+  container.addEventListener('keydown', handleKeydown);
+
+  return () => {
+    container.removeEventListener('keydown', handleKeydown);
+  };
 }
 
 function escapeICS(text) {
@@ -1773,29 +1833,104 @@ async function refreshMyBookingsIfOpen() {
   await loadMyBookings(true, { silent: true });
 }
 
-function openMyBookingsOverlay() {
+function openLoginOverlay(triggerElement = null) {
+  if (!loginOverlay) {
+    return;
+  }
+  if (!loginOverlay.hidden) {
+    if (triggerElement) {
+      loginOverlayTrigger = triggerElement;
+    }
+    return;
+  }
+  loginOverlayTrigger = triggerElement || loginOverlayTrigger || document.activeElement;
+  loginOverlay.hidden = false;
+  updateBodyOverlayState();
+  if (loginFocusTrapCleanup) {
+    loginFocusTrapCleanup();
+  }
+  loginFocusTrapCleanup = activateFocusTrap(loginOverlay);
+  requestAnimationFrame(() => {
+    const focusTarget =
+      (loginUsernameInput && !loginUsernameInput.value && loginUsernameInput) ||
+      (loginPasswordInput && !loginPasswordInput.value && loginPasswordInput) ||
+      getFocusableElements(loginOverlay)[0];
+    focusTarget?.focus();
+  });
+}
+
+function closeLoginOverlay(options = {}) {
+  const { restoreFocus = true } = options;
+  if (!loginOverlay || loginOverlay.hidden) {
+    if (loginFocusTrapCleanup) {
+      loginFocusTrapCleanup();
+      loginFocusTrapCleanup = null;
+    }
+    return;
+  }
+  loginOverlay.hidden = true;
+  if (loginFocusTrapCleanup) {
+    loginFocusTrapCleanup();
+    loginFocusTrapCleanup = null;
+  }
+  updateBodyOverlayState();
+  const focusTarget = loginOverlayTrigger || loginToggleBtn;
+  loginOverlayTrigger = null;
+  if (restoreFocus && focusTarget && typeof focusTarget.focus === 'function') {
+    focusTarget.focus();
+  }
+}
+
+function openMyBookingsOverlay(triggerElement = null) {
   if (!myBookingsOverlay) {
     return;
   }
   if (!myBookingsOverlay.hidden) {
+    if (triggerElement) {
+      myBookingsOverlayTrigger = triggerElement;
+    }
     return;
   }
+  myBookingsOverlayTrigger = triggerElement || myBookingsOverlayTrigger || document.activeElement;
   myBookingsOverlay.hidden = false;
+  myBookingsOverlay.scrollTop = 0;
   updateMyBookingsFeedback('', null);
   renderMyBookings();
   updateBodyOverlayState();
+  if (myBookingsFocusTrapCleanup) {
+    myBookingsFocusTrapCleanup();
+  }
+  myBookingsFocusTrapCleanup = activateFocusTrap(myBookingsOverlay);
   requestAnimationFrame(() => {
-    myBookingsPhoneInput?.focus();
+    const focusTarget =
+      (myBookingsPhoneInput && !myBookingsPhoneInput.value && myBookingsPhoneInput) ||
+      (myBookingsEmailInput && !myBookingsEmailInput.value && myBookingsEmailInput) ||
+      getFocusableElements(myBookingsOverlay)[0];
+    focusTarget?.focus();
   });
 }
 
-function closeMyBookingsOverlay() {
+function closeMyBookingsOverlay(options = {}) {
+  const { restoreFocus = true } = options;
   if (!myBookingsOverlay || myBookingsOverlay.hidden) {
+    if (myBookingsFocusTrapCleanup) {
+      myBookingsFocusTrapCleanup();
+      myBookingsFocusTrapCleanup = null;
+    }
     return;
   }
   myBookingsOverlay.hidden = true;
+  myBookingsOverlay.scrollTop = 0;
+  if (myBookingsFocusTrapCleanup) {
+    myBookingsFocusTrapCleanup();
+    myBookingsFocusTrapCleanup = null;
+  }
   updateBodyOverlayState();
-  myBookingsToggleBtn?.focus();
+  const focusTarget = myBookingsOverlayTrigger || myBookingsToggleBtn;
+  myBookingsOverlayTrigger = null;
+  if (restoreFocus && focusTarget && typeof focusTarget.focus === 'function') {
+    focusTarget.focus();
+  }
 }
 
 /**
@@ -2161,9 +2296,7 @@ function closeAdminView() {
   if (publicPage) {
     publicPage.hidden = false;
   }
-  if (loginOverlay) {
-    loginOverlay.hidden = true;
-  }
+  closeLoginOverlay({ restoreFocus: false });
   adminActiveDate = null;
   resetAdminTimesList();
   if (loginErrorBox) {
@@ -2202,10 +2335,7 @@ async function processLogin() {
   if (loginErrorBox) {
     loginErrorBox.textContent = '';
   }
-  if (loginOverlay) {
-    loginOverlay.hidden = true;
-  }
-  updateBodyOverlayState();
+  closeLoginOverlay({ restoreFocus: false });
   if (publicPage) {
     publicPage.hidden = true;
   }
@@ -2221,10 +2351,7 @@ async function processLogin() {
     if (loginErrorBox) {
       loginErrorBox.textContent = 'Klarte ikke å laste kalenderen. Prøv igjen.';
     }
-    if (loginOverlay) {
-      loginOverlay.hidden = false;
-    }
-    updateBodyOverlayState();
+    openLoginOverlay(loginToggleBtn);
     if (publicPage) {
       publicPage.hidden = false;
     }
@@ -2255,8 +2382,8 @@ if (myBookingsForm) {
 }
 
 if (myBookingsToggleBtn) {
-  myBookingsToggleBtn.addEventListener('click', () => {
-    openMyBookingsOverlay();
+  myBookingsToggleBtn.addEventListener('click', (event) => {
+    openMyBookingsOverlay(event.currentTarget);
   });
 }
 
@@ -2267,18 +2394,14 @@ if (myBookingsCloseBtn) {
 }
 
 if (loginToggleBtn) {
-  loginToggleBtn.addEventListener('click', () => {
+  loginToggleBtn.addEventListener('click', (event) => {
     if (loginForm) {
       loginForm.reset();
     }
     if (loginErrorBox) {
       loginErrorBox.textContent = '';
     }
-    if (loginOverlay) {
-      loginOverlay.hidden = false;
-    }
-    updateBodyOverlayState();
-    loginUsernameInput?.focus();
+    openLoginOverlay(event.currentTarget);
   });
 }
 
@@ -2287,14 +2410,10 @@ if (loginCancelBtn) {
     if (loginForm) {
       loginForm.reset();
     }
-    if (loginOverlay) {
-      loginOverlay.hidden = true;
-    }
     if (loginErrorBox) {
       loginErrorBox.textContent = '';
     }
-    updateBodyOverlayState();
-    loginToggleBtn?.focus();
+    closeLoginOverlay();
   });
 }
 
