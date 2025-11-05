@@ -58,6 +58,13 @@ let calendarSignedUrl = null;
 let calendarBucketEnsured = false;
 let calendarStorageDisabled = false;
 
+const ADMIN_NOTIFICATION_RECIPIENTS = [
+  'post@finnsfairway.no',
+  'fredrik@finnsfairway.no'
+];
+const ADMIN_NOTIFICATION_FUNCTION_NAME = 'send-booking-notification';
+const ADMIN_NOTIFICATION_TABLE = 'booking_notifications';
+
 // Define the standard time slots (24‑hour format) you wish to offer.
 const availableTimes = [
   '08:00',
@@ -1606,6 +1613,167 @@ function formatDateWithYear(dateStr) {
   });
 }
 
+function buildNotificationSlotEntry(slot) {
+  if (!slot) {
+    return null;
+  }
+  const dateStr = String(slot.date || '').trim();
+  const timeValue = normaliseTimeValue(slot.time);
+  if (!dateStr || !timeValue) {
+    return null;
+  }
+  const normalisedLane = normalizeLane(slot.lane);
+  const laneLabel =
+    normalisedLane === 'full'
+      ? 'Full bane'
+      : normalisedLane === 'half'
+      ? 'Halv bane'
+      : String(slot.lane || '');
+  return {
+    date: dateStr,
+    dateLabel: formatDateLabel(dateStr),
+    dateWithYear: formatDateWithYear(dateStr),
+    time: timeValue,
+    timeLabel: formatTimeInterval(timeValue),
+    lane: normalisedLane,
+    laneLabel
+  };
+}
+
+function buildNotificationContactPayload(contact) {
+  if (!contact) {
+    return {
+      name: '',
+      email: '',
+      phone: '',
+      phoneDigits: '',
+      club: '',
+      gender: '',
+      genderLabel: '',
+      age: ''
+    };
+  }
+  const name = String(contact.name || '').trim();
+  const email = String(contact.email || '').trim();
+  const phone = String(contact.phone || '').trim();
+  const phoneDigits = normalisePhone(contact.phone || contact.phoneDigits || '');
+  const club = String(contact.club || '').trim();
+  const gender = String(contact.gender || '').trim();
+  const age = String(contact.age || '').trim();
+  return {
+    name,
+    email,
+    phone,
+    phoneDigits,
+    club,
+    gender,
+    genderLabel: formatGenderLabel(gender),
+    age
+  };
+}
+
+function buildBookingNotificationMessage(contact, slotEntries) {
+  const lines = ['Hei Finns Fairway,', '', 'Det er registrert en ny booking i Sparebanken Norge Arena.', ''];
+  if (contact?.name) {
+    lines.push(`Navn: ${contact.name}`);
+  }
+  if (contact?.club) {
+    lines.push(`Klubb: ${contact.club}`);
+  }
+  if (contact?.genderLabel) {
+    lines.push(`Kjønn: ${contact.genderLabel}`);
+  }
+  if (contact?.age) {
+    lines.push(`Årskull: ${contact.age}`);
+  }
+  if (contact?.email) {
+    lines.push(`E-post: ${contact.email}`);
+  }
+  if (contact?.phone) {
+    lines.push(`Telefon: ${contact.phone}`);
+  }
+  if (!slotEntries || slotEntries.length === 0) {
+    lines.push('', 'Ingen tider ble registrert på bestillingen.');
+  } else {
+    lines.push('', slotEntries.length === 1 ? 'Booking:' : 'Bookinger:');
+    slotEntries.forEach((entry) => {
+      const dateLabel = entry.dateWithYear || entry.dateLabel || entry.date;
+      const timeLabel = entry.timeLabel || entry.time;
+      lines.push(`- ${dateLabel} kl ${timeLabel} – ${entry.laneLabel}`);
+    });
+  }
+  lines.push('', 'Betaling via Vipps bekrefter reservasjonen.');
+  return lines.join('\n');
+}
+
+async function notifyAdminsOfBooking(contactDetails, slots) {
+  if (!supabaseClient || !Array.isArray(slots) || slots.length === 0) {
+    return false;
+  }
+
+  const recipients = (ADMIN_NOTIFICATION_RECIPIENTS || [])
+    .map((email) => String(email || '').trim())
+    .filter((email, index, array) => email && array.indexOf(email) === index);
+
+  if (recipients.length === 0) {
+    return false;
+  }
+
+  const slotEntries = slots.map(buildNotificationSlotEntry).filter(Boolean);
+  if (!slotEntries.length) {
+    return false;
+  }
+
+  const contact = buildNotificationContactPayload(contactDetails);
+  const body = buildBookingNotificationMessage(contact, slotEntries);
+  const payload = {
+    recipients,
+    contact,
+    slots: slotEntries,
+    subject: 'Ny booking registrert',
+    body,
+    createdAt: new Date().toISOString()
+  };
+
+  let handled = false;
+  const functionsClient = supabaseClient?.functions;
+  if (functionsClient && typeof functionsClient.invoke === 'function') {
+    try {
+      const { error } = await functionsClient.invoke(ADMIN_NOTIFICATION_FUNCTION_NAME, { body: payload });
+      if (error) {
+        throw error;
+      }
+      handled = true;
+    } catch (error) {
+      console.warn('Klarte ikke å sende e-postvarsel via Edge Function:', error?.message || error);
+    }
+  }
+
+  if (!handled) {
+    try {
+      const insertPayload = {
+        recipients,
+        subject: payload.subject,
+        body: payload.body,
+        contact,
+        slots: slotEntries,
+        created_at: payload.createdAt
+      };
+      const { error } = await supabaseClient
+        .from(ADMIN_NOTIFICATION_TABLE)
+        .insert(insertPayload, { returning: 'minimal' });
+      if (error) {
+        throw error;
+      }
+      handled = true;
+    } catch (error) {
+      console.warn('Kunne ikke lagre e-postvarsel for oppfølging:', error?.message || error);
+    }
+  }
+
+  return handled;
+}
+
 function renderMyBookings() {
   if (!myBookingsListContainer) return;
   myBookingsListContainer.innerHTML = '';
@@ -2033,18 +2201,27 @@ async function submitBooking() {
     summaryMessageBox.classList.add('error');
     return;
   }
+  const contactDetails = {
+    name,
+    phone,
+    phoneDigits: normalisedPhoneValue,
+    email,
+    club,
+    gender,
+    age
+  };
   // Save to Supabase
   if (supabaseClient) {
     const insertData = selectedSlots.map((slot) => ({
       date: slot.date,
       time: slot.time,
       lane: normalizeLane(slot.lane) || slot.lane,
-      name,
-      phone: normalisedPhoneValue,
-      email,
-      club,
-      gender,
-      age
+      name: contactDetails.name,
+      phone: contactDetails.phoneDigits,
+      email: contactDetails.email,
+      club: contactDetails.club,
+      gender: contactDetails.gender,
+      age: contactDetails.age
     }));
     const { error } = await supabaseClient.from('bookings').insert(insertData, { returning: 'minimal' });
     if (error) {
@@ -2077,12 +2254,12 @@ async function submitBooking() {
         date: slot.date,
         time: slot.time,
         lane: normalizeLane(slot.lane),
-        name,
-        phone,
-        email,
-        club,
-        gender,
-        age
+        name: contactDetails.name,
+        phone: contactDetails.phoneDigits,
+        email: contactDetails.email,
+        club: contactDetails.club,
+        gender: contactDetails.gender,
+        age: contactDetails.age
       });
     });
     if (isAdminViewActive()) {
@@ -2097,8 +2274,13 @@ async function submitBooking() {
       }
     }
   }
-  await refreshMyBookingsIfOpen();
   const confirmedSlots = selectedSlots.map((slot) => ({ ...slot }));
+  try {
+    await notifyAdminsOfBooking(contactDetails, confirmedSlots);
+  } catch (notificationError) {
+    console.warn('Kunne ikke sende varsel om ny booking:', notificationError?.message || notificationError);
+  }
+  await refreshMyBookingsIfOpen();
   // Clear selection and form
   selectedSlots = [];
   activeDate = null;
