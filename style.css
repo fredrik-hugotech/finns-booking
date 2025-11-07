@@ -848,6 +848,10 @@ main {
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border 0.2s ease;
   border: 1px solid rgba(0, 56, 44, 0.08);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .day-cell:focus-visible {
@@ -864,6 +868,31 @@ main {
   letter-spacing: 0.08em;
   color: var(--text-muted);
   padding: 0;
+  position: static;
+  display: block;
+}
+
+.day-cell .day-number {
+  display: block;
+  line-height: 1;
+}
+
+.day-cell .day-occupancy {
+  position: absolute;
+  top: clamp(0.2rem, 0.9vw, 0.45rem);
+  right: clamp(0.2rem, 0.9vw, 0.45rem);
+  font-size: clamp(0.52rem, 1.2vw, 0.62rem);
+  font-weight: 600;
+  color: rgba(0, 56, 44, 0.6);
+  pointer-events: none;
+}
+
+.day-cell.half-day .day-occupancy {
+  color: rgba(201, 138, 0, 0.85);
+}
+
+.day-cell.full-day .day-occupancy {
+  color: rgba(160, 32, 32, 0.9);
 }
 
 .day-cell.available-day {

@@ -903,7 +903,7 @@ async function loadMonthBookings(year, month) {
  * no half-lane units remain, "half" if over 50% booked, otherwise
  * "available".
  */
-function computeDateStatusFromBookings(dateStr, bookings, includeSelections) {
+function calculateDateOccupancyDetails(dateStr, bookings, includeSelections) {
   const totalUnits = availableTimes.length * 2;
   let occupiedUnits = 0;
 
@@ -928,6 +928,17 @@ function computeDateStatusFromBookings(dateStr, bookings, includeSelections) {
     }
     occupiedUnits += Math.min(timeUnits, 2);
   });
+
+  const percent = totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
+  return { occupiedUnits, totalUnits, percent };
+}
+
+function computeDateStatusFromBookings(dateStr, bookings, includeSelections) {
+  const { occupiedUnits, totalUnits } = calculateDateOccupancyDetails(
+    dateStr,
+    bookings,
+    includeSelections
+  );
 
   if (occupiedUnits >= totalUnits) return 'full';
   if (occupiedUnits >= totalUnits / 2) return 'half';
@@ -1009,6 +1020,7 @@ function renderMonthCalendar() {
     const cell = document.createElement('div');
     cell.classList.add('day-cell');
     const status = computeDateStatus(dateStr);
+    const occupancyDetails = calculateDateOccupancyDetails(dateStr, monthBookings, true);
     const statusLabel =
       status === 'full' ? 'fullbooket' : status === 'half' ? 'begrenset kapasitet' : 'ledig kapasitet';
     let ariaLabel = `${day}. ${monthNames[currentMonth]}`;
@@ -1016,7 +1028,10 @@ function renderMonthCalendar() {
       cell.classList.add('today');
       ariaLabel = `I dag, ${ariaLabel}`;
     }
-    cell.setAttribute('aria-label', `${ariaLabel} – ${statusLabel}`);
+    cell.setAttribute(
+      'aria-label',
+      `${ariaLabel} – ${statusLabel} – ${occupancyDetails.percent}% booket`
+    );
     if (status === 'full') {
       cell.classList.add('full-day');
     } else if (status === 'half') {
@@ -1027,10 +1042,19 @@ function renderMonthCalendar() {
     if (activeDate === dateStr) {
       cell.classList.add('active-day');
     }
-    if (selectedSlots.some(s => s.date === dateStr)) {
+    if (selectedSlots.some((s) => s.date === dateStr)) {
       cell.classList.add('selected-day');
     }
-    cell.textContent = day;
+    const dayNumber = document.createElement('span');
+    dayNumber.classList.add('day-number');
+    dayNumber.textContent = day;
+    cell.appendChild(dayNumber);
+
+    const occupancyIndicator = document.createElement('span');
+    occupancyIndicator.classList.add('day-occupancy');
+    occupancyIndicator.textContent = `${occupancyDetails.percent}%`;
+    cell.appendChild(occupancyIndicator);
+
     cell.setAttribute('role', 'button');
     cell.setAttribute('tabindex', status === 'full' ? '-1' : '0');
     if (status === 'full') {
@@ -1373,6 +1397,7 @@ function renderAdminMonthCalendar() {
     const cell = document.createElement('div');
     cell.classList.add('day-cell');
     const status = computeDateStatusFromBookings(dateStr, adminBookings, false);
+    const occupancyDetails = calculateDateOccupancyDetails(dateStr, adminBookings, false);
     if (status === 'full') {
       cell.classList.add('full-day');
     } else if (status === 'half') {
@@ -1386,7 +1411,16 @@ function renderAdminMonthCalendar() {
     if (adminActiveDate === dateStr) {
       cell.classList.add('active-day');
     }
-    cell.textContent = day;
+    const dayNumber = document.createElement('span');
+    dayNumber.classList.add('day-number');
+    dayNumber.textContent = day;
+    cell.appendChild(dayNumber);
+
+    const occupancyIndicator = document.createElement('span');
+    occupancyIndicator.classList.add('day-occupancy');
+    occupancyIndicator.textContent = `${occupancyDetails.percent}%`;
+    cell.appendChild(occupancyIndicator);
+
     cell.setAttribute('role', 'button');
     cell.setAttribute('tabindex', '0');
     cell.addEventListener('click', () => {
