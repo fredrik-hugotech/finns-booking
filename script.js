@@ -19,7 +19,7 @@ const supabaseClient =
     ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     : null;
 
-const AUTH_USERNAME = 'finnsfairway';
+const AUTH_USERNAME = 'ffadmin';
 const AUTH_PASSWORD = '12345';
 
 let isAuthenticated = false;
@@ -138,6 +138,27 @@ function phonesMatch(a, b) {
   return digitsA.endsWith(digitsB) || digitsB.endsWith(digitsA);
 }
 
+function bookingHasPhone(booking) {
+  if (!booking) {
+    return false;
+  }
+  if (booking.phoneDigits) {
+    const digits = extractPhoneDigits(booking.phoneDigits);
+    if (digits) {
+      return true;
+    }
+  }
+  const digits = extractPhoneDigits(booking.phone);
+  return Boolean(digits);
+}
+
+function filterBookingsWithPhone(bookings) {
+  if (!Array.isArray(bookings)) {
+    return [];
+  }
+  return bookings.filter(bookingHasPhone);
+}
+
 function normaliseTimeValue(value) {
   if (value == null) {
     return '';
@@ -212,8 +233,8 @@ async function locateBookingByContact(booking) {
   let monthData = [];
   if (year === currentYear && monthIndex === currentMonth) {
     monthData = monthBookings.slice();
-  } else if (adminBookings.length && year === adminYear && monthIndex === adminMonth) {
-    monthData = adminBookings.slice();
+  } else if (adminBookingsRaw.length && year === adminYear && monthIndex === adminMonth) {
+    monthData = adminBookingsRaw.slice();
   } else {
     monthData = await fetchMonthBookings(year, monthIndex);
   }
@@ -348,7 +369,7 @@ function filterActiveBookings(bookings) {
 }
 
 function gatherAllKnownBookings() {
-  const combined = [...monthBookings, ...adminBookings];
+  const combined = [...monthBookings, ...adminBookingsRaw];
   const unique = new Map();
   combined.forEach((booking) => {
     if (!booking) return;
@@ -548,6 +569,7 @@ const priceHalf = 1490;
 let selectedSlots = []; // { date, time, lane }
 let monthBookings = []; // bookings loaded for the current month
 let adminBookings = [];
+let adminBookingsRaw = [];
 let myBookings = [];
 let myBookingsCredentials = null;
 let myBookingsLoaded = false;
@@ -558,6 +580,12 @@ recalculateSeason();
 
 function isAdminViewActive() {
   return Boolean(isAuthenticated && adminPanel && !adminPanel.hidden);
+}
+
+function setAdminBookingsFromSource(source) {
+  const base = Array.isArray(source) ? source.slice() : [];
+  adminBookingsRaw = base.slice();
+  adminBookings = filterBookingsWithPhone(base);
 }
 
 function shouldShowInlineBookings() {
@@ -1147,6 +1175,7 @@ function loadTimesForDate(dateStr) {
 
   const bookingsForDate = monthBookings
     .filter((booking) => booking.date === dateStr)
+    .filter(bookingHasPhone)
     .map((booking) => ({
       ...booking,
       lane: normalizeLane(booking.lane),
@@ -1609,9 +1638,10 @@ async function loadAdminMonth(year, month) {
     adminSeasonMonthIndex = seasonIndex;
   }
   if (adminYear === currentYear && adminMonth === currentMonth) {
-    adminBookings = monthBookings.slice();
+    setAdminBookingsFromSource(monthBookings);
   } else {
-    adminBookings = await fetchMonthBookings(adminYear, adminMonth);
+    const fetched = await fetchMonthBookings(adminYear, adminMonth);
+    setAdminBookingsFromSource(fetched);
   }
   if (!isDateInMonth(adminActiveDate, adminYear, adminMonth)) {
     adminActiveDate = null;
@@ -2008,8 +2038,8 @@ async function fetchMyBookings(email, phone) {
 
     if (year === currentYear && month === currentMonth) {
       monthPromises.push(Promise.resolve(monthBookings.slice()));
-    } else if (adminBookings.length && year === adminYear && month === adminMonth) {
-      monthPromises.push(Promise.resolve(adminBookings.slice()));
+    } else if (adminBookingsRaw.length && year === adminYear && month === adminMonth) {
+      monthPromises.push(Promise.resolve(adminBookingsRaw.slice()));
     } else {
       monthPromises.push(fetchMonthBookings(year, month));
     }
@@ -2345,9 +2375,10 @@ async function submitBooking() {
     await refreshCalendarFeed();
     if (isAdminViewActive()) {
       if (adminYear === currentYear && adminMonth === currentMonth) {
-        adminBookings = monthBookings.slice();
+        setAdminBookingsFromSource(monthBookings);
       } else {
-        adminBookings = await fetchMonthBookings(adminYear, adminMonth);
+        const fetched = await fetchMonthBookings(adminYear, adminMonth);
+        setAdminBookingsFromSource(fetched);
       }
       renderAdminMonthCalendar();
       if (adminActiveDate) {
@@ -2373,7 +2404,7 @@ async function submitBooking() {
     });
     if (isAdminViewActive()) {
       if (adminYear === currentYear && adminMonth === currentMonth) {
-        adminBookings = monthBookings.slice();
+        setAdminBookingsFromSource(monthBookings);
       }
       renderAdminMonthCalendar();
       if (adminActiveDate) {
@@ -2487,9 +2518,10 @@ function startCalendarPolling() {
       }
       if (isAdminViewActive()) {
         if (adminYear === currentYear && adminMonth === currentMonth) {
-          adminBookings = monthBookings.slice();
+          setAdminBookingsFromSource(monthBookings);
         } else {
-          adminBookings = await fetchMonthBookings(adminYear, adminMonth);
+          const fetched = await fetchMonthBookings(adminYear, adminMonth);
+          setAdminBookingsFromSource(fetched);
         }
         renderAdminMonthCalendar();
         if (adminActiveDate) {
@@ -2516,9 +2548,10 @@ document.addEventListener('visibilitychange', async () => {
     }
     if (isAdminViewActive()) {
       if (adminYear === currentYear && adminMonth === currentMonth) {
-        adminBookings = monthBookings.slice();
+        setAdminBookingsFromSource(monthBookings);
       } else {
-        adminBookings = await fetchMonthBookings(adminYear, adminMonth);
+        const fetched = await fetchMonthBookings(adminYear, adminMonth);
+        setAdminBookingsFromSource(fetched);
       }
       renderAdminMonthCalendar();
       if (adminActiveDate) {
@@ -2590,6 +2623,8 @@ function closeAdminView(options = {}) {
     publicPage.hidden = false;
   }
   adminActiveDate = null;
+  adminBookingsRaw = [];
+  adminBookings = [];
   resetAdminTimesList();
   updateBodyOverlayState();
 
