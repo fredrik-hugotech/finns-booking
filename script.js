@@ -1811,7 +1811,7 @@ function buildBookingNotificationMessage(contact, slotEntries) {
       lines.push(`- ${dateLabel} kl ${timeLabel} – ${entry.laneLabel}`);
     });
   }
-  lines.push('', 'Betaling via Vipps bekrefter reservasjonen.');
+  lines.push('', 'Skann Vipps-QR-koden for å bekrefte reservasjonen.');
   return lines.join('\n');
 }
 
