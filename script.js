@@ -949,6 +949,17 @@ function computeDateStatus(dateStr) {
   return computeDateStatusFromBookings(dateStr, monthBookings, true);
 }
 
+function determineOccupancyTier(percent) {
+  const numeric = Number(percent);
+  const value = Number.isFinite(numeric) ? numeric : 0;
+  if (value >= 100) return 'occupancy-tier-full';
+  if (value >= 75) return 'occupancy-tier-very-high';
+  if (value >= 50) return 'occupancy-tier-high';
+  if (value >= 25) return 'occupancy-tier-medium';
+  if (value > 0) return 'occupancy-tier-low';
+  return 'occupancy-tier-empty';
+}
+
 function calculateTimeAvailability(dateStr, time, bookings, includeSelections) {
   let occupied = 0;
   preBookedTimes.forEach((b) => {
@@ -1021,6 +1032,7 @@ function renderMonthCalendar() {
     cell.classList.add('day-cell');
     const status = computeDateStatus(dateStr);
     const occupancyDetails = calculateDateOccupancyDetails(dateStr, monthBookings, true);
+    const occupancyTierClass = determineOccupancyTier(occupancyDetails.percent);
     const statusLabel =
       status === 'full' ? 'fullbooket' : status === 'half' ? 'begrenset kapasitet' : 'ledig kapasitet';
     let ariaLabel = `${day}. ${monthNames[currentMonth]}`;
@@ -1039,6 +1051,7 @@ function renderMonthCalendar() {
     } else {
       cell.classList.add('available-day');
     }
+    cell.classList.add(occupancyTierClass);
     if (activeDate === dateStr) {
       cell.classList.add('active-day');
     }
@@ -1398,6 +1411,7 @@ function renderAdminMonthCalendar() {
     cell.classList.add('day-cell');
     const status = computeDateStatusFromBookings(dateStr, adminBookings, false);
     const occupancyDetails = calculateDateOccupancyDetails(dateStr, adminBookings, false);
+    const occupancyTierClass = determineOccupancyTier(occupancyDetails.percent);
     if (status === 'full') {
       cell.classList.add('full-day');
     } else if (status === 'half') {
@@ -1405,6 +1419,7 @@ function renderAdminMonthCalendar() {
     } else {
       cell.classList.add('available-day');
     }
+    cell.classList.add(occupancyTierClass);
     if (dateStr === todayStr) {
       cell.classList.add('today');
     }
