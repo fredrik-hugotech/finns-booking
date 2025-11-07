@@ -883,7 +883,7 @@ main {
   right: clamp(0.2rem, 0.9vw, 0.45rem);
   font-size: clamp(0.52rem, 1.2vw, 0.62rem);
   font-weight: 600;
-  color: rgba(0, 56, 44, 0.6);
+  color: rgba(0, 73, 51, 0.7);
   pointer-events: none;
 }
 
@@ -903,28 +903,28 @@ main {
 }
 
 .day-cell.occupancy-tier-empty {
-  background: rgba(186, 241, 210, 0.96);
-  border-color: rgba(24, 128, 84, 0.42);
+  background: rgba(206, 247, 221, 0.96);
+  border-color: rgba(36, 140, 94, 0.42);
 }
 
 .day-cell.occupancy-tier-low {
-  background: rgba(156, 229, 194, 0.96);
-  border-color: rgba(17, 111, 74, 0.48);
+  background: rgba(184, 240, 209, 0.96);
+  border-color: rgba(30, 132, 88, 0.46);
 }
 
 .day-cell.occupancy-tier-medium {
-  background: rgba(234, 235, 188, 0.96);
-  border-color: rgba(178, 140, 18, 0.42);
+  background: rgba(162, 233, 197, 0.96);
+  border-color: rgba(25, 120, 80, 0.5);
 }
 
 .day-cell.occupancy-tier-high {
-  background: rgba(247, 220, 184, 0.96);
-  border-color: rgba(204, 120, 30, 0.46);
+  background: rgba(140, 225, 185, 0.95);
+  border-color: rgba(19, 112, 74, 0.52);
 }
 
 .day-cell.occupancy-tier-very-high {
-  background: rgba(247, 202, 196, 0.96);
-  border-color: rgba(194, 86, 51, 0.48);
+  background: rgba(249, 235, 186, 0.96);
+  border-color: rgba(188, 144, 26, 0.5);
 }
 
 .day-cell.occupancy-tier-full {
@@ -933,19 +933,16 @@ main {
 }
 
 .day-cell.occupancy-tier-empty .day-occupancy,
-.day-cell.occupancy-tier-low .day-occupancy {
-  color: rgba(0, 82, 58, 0.75);
-}
-
-.day-cell.occupancy-tier-medium .day-occupancy {
-  color: rgba(168, 124, 12, 0.82);
-}
-
+.day-cell.occupancy-tier-low .day-occupancy,
+.day-cell.occupancy-tier-medium .day-occupancy,
 .day-cell.occupancy-tier-high .day-occupancy {
-  color: rgba(189, 110, 24, 0.86);
+  color: rgba(0, 82, 58, 0.78);
 }
 
-.day-cell.occupancy-tier-very-high .day-occupancy,
+.day-cell.occupancy-tier-very-high .day-occupancy {
+  color: rgba(138, 108, 0, 0.85);
+}
+
 .day-cell.occupancy-tier-full .day-occupancy {
   color: rgba(148, 28, 28, 0.92);
 }

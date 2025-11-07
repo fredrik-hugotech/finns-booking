@@ -953,9 +953,9 @@ function determineOccupancyTier(percent) {
   const numeric = Number(percent);
   const value = Number.isFinite(numeric) ? numeric : 0;
   if (value >= 100) return 'occupancy-tier-full';
-  if (value >= 75) return 'occupancy-tier-very-high';
-  if (value >= 50) return 'occupancy-tier-high';
-  if (value >= 25) return 'occupancy-tier-medium';
+  if (value >= 80) return 'occupancy-tier-very-high';
+  if (value >= 60) return 'occupancy-tier-high';
+  if (value >= 40) return 'occupancy-tier-medium';
   if (value > 0) return 'occupancy-tier-low';
   return 'occupancy-tier-empty';
 }
