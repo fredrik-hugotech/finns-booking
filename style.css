@@ -545,6 +545,8 @@ body.auth-locked {
 .admin-panel-actions {
   display: flex;
   align-items: center;
+  gap: clamp(0.6rem, 1.5vw, 1rem);
+  flex-wrap: wrap;
 }
 
 .admin-close {
@@ -564,6 +566,31 @@ body.auth-locked {
   transform: translateY(-1px);
   outline: none;
   box-shadow: var(--shadow-sm);
+}
+
+.admin-logout {
+  border-radius: 999px;
+  border: 1px solid rgba(0, 121, 92, 0.3);
+  background: rgba(0, 121, 92, 0.08);
+  color: var(--green-900);
+  font: inherit;
+  font-weight: 600;
+  padding: 0.65rem 1.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  cursor: pointer;
+  transition: border 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.admin-logout:hover,
+.admin-logout:focus-visible {
+  background: rgba(201, 64, 64, 0.12);
+  color: #7a1a1a;
+  border-color: rgba(201, 64, 64, 0.35);
+  transform: translateY(-1px);
+  outline: none;
 }
 
 .admin-panel-body {
@@ -897,6 +924,56 @@ main {
   color: var(--text-muted);
 }
 
+.times-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.15rem 0 0.35rem;
+}
+
+.times-filter-toggle {
+  border: 1px solid rgba(0, 121, 92, 0.45);
+  background: var(--white);
+  color: var(--green-900);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 42px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.times-filter-toggle:hover,
+.times-filter-toggle:focus-visible {
+  border-color: rgba(0, 121, 92, 0.7);
+  box-shadow: 0 12px 24px rgba(0, 56, 44, 0.16);
+}
+
+.times-filter-toggle[aria-pressed='true'] {
+  background: rgba(201, 64, 64, 0.16);
+  border-color: rgba(201, 64, 64, 0.35);
+  color: #8a1d1d;
+  box-shadow: 0 14px 28px rgba(119, 24, 24, 0.16);
+}
+
+.times-filter-toggle[aria-pressed='true']:hover,
+.times-filter-toggle[aria-pressed='true']:focus-visible {
+  border-color: rgba(201, 64, 64, 0.5);
+  color: #6f1414;
+}
+
+.times-filter-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+}
+
 .time-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -906,6 +983,10 @@ main {
   padding: 0.55rem clamp(0.55rem, 2vw, 0.7rem);
   border-radius: var(--radius-sm);
   background: rgba(0, 121, 92, 0.06);
+}
+
+.time-row-inline {
+  align-items: flex-start;
 }
 
 .time-row span {
@@ -964,6 +1045,10 @@ main {
   gap: 0.3rem;
 }
 
+.time-bookings-inline {
+  gap: 0.4rem;
+}
+
 .time-booking-item {
   background: var(--white);
   border-radius: var(--radius-sm);
@@ -977,6 +1062,12 @@ main {
   gap: 0.35rem;
 }
 
+.time-booking-item-inline {
+  background: rgba(201, 64, 64, 0.12);
+  border-color: rgba(201, 64, 64, 0.32);
+  color: #6f1f1f;
+}
+
 .booking-main {
   display: flex;
   align-items: center;
@@ -985,15 +1076,38 @@ main {
   color: var(--text-dark);
 }
 
+.time-booking-item-inline .booking-main {
+  color: #5b1515;
+}
+
+.booking-time {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: rgba(201, 64, 64, 0.2);
+  color: #641212;
+}
+
 .booking-name {
   font-weight: 600;
   color: var(--text-dark);
+}
+
+.time-booking-item-inline .booking-name {
+  color: #5b1515;
 }
 
 .booking-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+}
+
+.time-booking-item-inline .booking-meta {
+  color: #6f1f1f;
 }
 
 .booking-pill {
@@ -1008,6 +1122,11 @@ main {
   color: var(--green-900);
 }
 
+.time-booking-item-inline .booking-pill {
+  background: rgba(201, 64, 64, 0.18);
+  color: #5b1515;
+}
+
 .booking-lane {
   font-weight: 700;
 }
@@ -1016,6 +1135,11 @@ main {
   background: rgba(0, 56, 44, 0.08);
   color: var(--text-muted);
   font-weight: 500;
+}
+
+.time-booking-item-inline .booking-pill.booking-contact {
+  background: rgba(201, 64, 64, 0.12);
+  color: #6f1f1f;
 }
 
 .booking-pill.booking-contact::before {
@@ -1502,9 +1626,17 @@ footer {
 
   .admin-panel-actions {
     width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.7rem;
   }
 
   .admin-close {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .admin-logout {
     width: 100%;
     justify-content: center;
   }

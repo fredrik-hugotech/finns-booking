@@ -43,6 +43,7 @@ const myBookingsFeedback = document.getElementById('myBookingsFeedback');
 const publicPage = document.querySelector('.page');
 const adminPanel = document.getElementById('adminPanel');
 const adminCloseBtn = document.getElementById('adminClose');
+const adminLogoutBtn = document.getElementById('adminLogout');
 
 const FOCUSABLE_SELECTORS =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -550,12 +551,21 @@ let adminBookings = [];
 let myBookings = [];
 let myBookingsCredentials = null;
 let myBookingsLoaded = false;
+let showInlineBookings = false;
 const MY_BOOKINGS_LOOKAHEAD_MONTHS = 36; // look ahead up to three years for self-service searches
 
 recalculateSeason();
 
 function isAdminViewActive() {
   return Boolean(isAuthenticated && adminPanel && !adminPanel.hidden);
+}
+
+function shouldShowInlineBookings() {
+  return isAdminViewActive() || (isAuthenticated && showInlineBookings);
+}
+
+function isInlineBookingMode() {
+  return Boolean(isAuthenticated && showInlineBookings && !isAdminViewActive());
 }
 
 // DOM elements for the new UI
@@ -1119,14 +1129,49 @@ function loadTimesForDate(dateStr) {
     return acc;
   }, {});
 
-  const showAdminDetails = isAdminViewActive();
+  const allowInlineToggle = isAuthenticated && !isAdminViewActive();
+  if (allowInlineToggle) {
+    const controls = document.createElement('div');
+    controls.classList.add('times-filters');
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.id = 'inlineBookingsToggle';
+    toggleBtn.classList.add('times-filter-toggle');
+    toggleBtn.setAttribute('aria-pressed', showInlineBookings ? 'true' : 'false');
+    toggleBtn.textContent = showInlineBookings ? 'Skjul bookede tider' : 'Vis bookede tider';
+    toggleBtn.addEventListener('click', () => {
+      const shouldRestoreFocus = document.activeElement === toggleBtn;
+      showInlineBookings = !showInlineBookings;
+      loadTimesForDate(dateStr);
+      if (shouldRestoreFocus) {
+        requestAnimationFrame(() => {
+          document.getElementById('inlineBookingsToggle')?.focus();
+        });
+      }
+    });
+
+    controls.appendChild(toggleBtn);
+
+    if (showInlineBookings) {
+      const hint = document.createElement('span');
+      hint.classList.add('times-filter-hint');
+      hint.textContent = 'Bookede tider er markert i rødt.';
+      controls.appendChild(hint);
+    }
+
+    timesList.appendChild(controls);
+  }
+
+  const showBookings = shouldShowInlineBookings();
+  const inlineMode = isInlineBookingMode();
   let hasAvailable = false;
   availableTimes.forEach((time) => {
     const avail = calculateTimeAvailability(dateStr, time, monthBookings, true);
     if (avail > 0) {
       hasAvailable = true;
     }
-    if (!showAdminDetails && avail <= 0) {
+    if (!showBookings && avail <= 0) {
       return;
     }
     const row = document.createElement('div');
@@ -1178,17 +1223,32 @@ function loadTimesForDate(dateStr) {
         }
         return a.name.localeCompare(b.name);
       });
-    if (showAdminDetails && bookingsForTime.length > 0) {
+    if (showBookings && bookingsForTime.length > 0) {
+      if (inlineMode) {
+        row.classList.add('time-row-inline');
+      }
       const bookedList = document.createElement('ul');
       bookedList.classList.add('time-bookings');
+      if (inlineMode) {
+        bookedList.classList.add('time-bookings-inline');
+      }
       bookingsForTime.forEach((booking) => {
         const item = document.createElement('li');
         item.classList.add('time-booking-item');
+        if (inlineMode) {
+          item.classList.add('time-booking-item-inline');
+        }
         const laneLabel = booking.lane === 'full' ? 'Full bane' : 'Halv bane';
         const nameText = booking.name || 'Ukjent navn';
 
         const header = document.createElement('div');
         header.classList.add('booking-main');
+        if (inlineMode) {
+          const timeBadge = document.createElement('span');
+          timeBadge.classList.add('booking-time');
+          timeBadge.textContent = formatTimeInterval(time);
+          header.appendChild(timeBadge);
+        }
 
         const laneSpan = document.createElement('span');
         laneSpan.classList.add('booking-lane', 'booking-pill');
@@ -2472,29 +2532,38 @@ async function initAdminView() {
   }
 }
 
-function closeAdminView() {
-  isAuthenticated = false;
+function closeAdminView(options = {}) {
+  const { logout = false } = options;
   if (adminPanel) {
     adminPanel.hidden = true;
   }
   if (publicPage) {
     publicPage.hidden = false;
   }
-  closeLoginOverlay({ restoreFocus: false });
   adminActiveDate = null;
   resetAdminTimesList();
-  if (loginErrorBox) {
-    loginErrorBox.textContent = '';
-  }
-  loginForm?.reset();
-  loginUsernameInput.value = '';
-  loginPasswordInput.value = '';
   updateBodyOverlayState();
+
+  if (logout) {
+    isAuthenticated = false;
+    showInlineBookings = false;
+    closeLoginOverlay({ restoreFocus: false });
+    if (loginErrorBox) {
+      loginErrorBox.textContent = '';
+    }
+    if (loginForm) {
+      loginForm.reset();
+    }
+    loginUsernameInput.value = '';
+    loginPasswordInput.value = '';
+  }
+
   if (activeDate) {
     loadTimesForDate(activeDate);
   } else {
     renderMonthCalendar();
   }
+
   loginToggleBtn?.focus();
 }
 
@@ -2516,6 +2585,7 @@ async function processLogin() {
   }
 
   isAuthenticated = true;
+  showInlineBookings = false;
   if (loginErrorBox) {
     loginErrorBox.textContent = '';
   }
@@ -2578,7 +2648,22 @@ if (myBookingsCloseBtn) {
 }
 
 if (loginToggleBtn) {
-  loginToggleBtn.addEventListener('click', (event) => {
+  loginToggleBtn.addEventListener('click', async (event) => {
+    if (isAuthenticated) {
+      if (publicPage) {
+        publicPage.hidden = true;
+      }
+      if (adminPanel) {
+        adminPanel.hidden = false;
+        adminPanel.scrollTop = 0;
+      }
+      try {
+        await initAdminView();
+      } catch (error) {
+        console.error('Kunne ikke åpne adminpanelet:', error);
+      }
+      return;
+    }
     if (loginForm) {
       loginForm.reset();
     }
@@ -2604,6 +2689,12 @@ if (loginCancelBtn) {
 if (adminCloseBtn) {
   adminCloseBtn.addEventListener('click', () => {
     closeAdminView();
+  });
+}
+
+if (adminLogoutBtn) {
+  adminLogoutBtn.addEventListener('click', () => {
+    closeAdminView({ logout: true });
   });
 }
 
