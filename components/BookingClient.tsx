@@ -1,7 +1,7 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
-import { X, Loader2, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { X, Loader2, Check } from 'lucide-react';
 import { ARENA, PRIS, SESONG } from '@/lib/config';
 import {
   TIMER, erHelg, halvdeler, nokkel, prisFor, slot, type Bane, type Belegg,
@@ -58,6 +58,39 @@ function oppsummer(linjer: Valgt[]): Linje[] {
     });
 }
 
+// Dagbrikker og ukenavigasjon etter mønster fra mer.golf-kalenderen.
+function ukeTekst(mandag: string, iDag: string) {
+  const denne = mandagI(iDag);
+  if (mandag === denne) return 'Denne uken';
+  if (mandag === leggTilDager(denne, 7)) return 'Neste uke';
+  const son = leggTilDager(mandag, 6);
+  return mandag.slice(5, 7) === son.slice(5, 7)
+    ? `${Number(mandag.slice(8))}.–${dagOgManed(son, true)}`
+    : `${dagOgManed(mandag, true)} – ${dagOgManed(son, true)}`;
+}
+
+function brikke(d: string, iDag: string) {
+  const tekst = d === iDag ? 'I dag' : d === leggTilDager(iDag, 1) ? 'I morgen' : DAGER[ukedag(d) - 1];
+  return { tekst, dato: `${Number(d.slice(8))}.${Number(d.slice(5, 7))}.` };
+}
+
+// Tidslinje for én dag: ledige timer enkeltvis, opptatte timer slått sammen.
+type Rad =
+  | { type: 'ledig'; time: number }
+  | { type: 'opptatt'; fra: number; til: number; tekst: string };
+
+function byggRader(erLedig: (t: number) => boolean, grunn: (t: number) => string): Rad[] {
+  const rader: Rad[] = [];
+  for (const t of TIMER) {
+    if (erLedig(t)) { rader.push({ type: 'ledig', time: t }); continue; }
+    const forrige = rader[rader.length - 1];
+    const tekst = grunn(t);
+    if (forrige?.type === 'opptatt' && forrige.til === t && forrige.tekst === tekst) forrige.til = t + 1;
+    else rader.push({ type: 'opptatt', fra: t, til: t + 1, tekst });
+  }
+  return rader;
+}
+
 export function BookingClient() {
   const [belegg, setBelegg] = useState<Belegg | null>(null);
   const [na, setNa] = useState<Na | null>(null);
@@ -66,7 +99,9 @@ export function BookingClient() {
 
   const [visning, setVisning] = useState<Visning>('enkelt');
   const [bane, setBane] = useState<Bane>('hel');
-  const [mandag, setMandag] = useState(mandagI(SESONG.fra));
+  const [dag, setDag] = useState(SESONG.fra);
+  const [fastDag, setFastDag] = useState(1);
+  const [retning, setRetning] = useState<'fwd' | 'back'>('fwd');
   const [valgt, setValgt] = useState<Valgt[]>([]);
   const [steg, setSteg] = useState<'velg' | 'skjema'>('velg');
   const [kvittering, setKvittering] = useState<Kvittering | null>(null);
@@ -80,29 +115,36 @@ export function BookingClient() {
       setNa(j.na);
       setDemo(j.demo);
       setLastFeil(null);
-      return j.na as Na;
+      return j as { belegg: Belegg; na: Na };
     } catch {
       setLastFeil('Fikk ikke hentet ledige tider. Sjekk nettet og prøv igjen.');
       return null;
     }
   }
   useEffect(() => {
-    last().then(n => { if (n && n.dato > SESONG.fra && n.dato <= SESONG.til) setMandag(mandagI(n.dato)); });
+    // Start på første dag med ledig hel bane.
+    last().then(j => {
+      if (!j) return;
+      const forste = ALLE_DATOER.find(d => TIMER.some(t => slot(d, t, j.belegg, j.na).ledigeHalvdeler === 2));
+      if (forste) setDag(forste);
+    });
   }, []);
 
   const trengs = halvdeler(bane);
+  const iDag = na?.dato ?? SESONG.fra;
   const ledig = (d: string, t: number) => !!belegg && !!na && slot(d, t, belegg, na).ledigeHalvdeler >= trengs;
+  const antallLedige = (d: string) => TIMER.filter(t => ledig(d, t)).length;
 
   // Faste tider: for hver ukedag og time, hvilke av de gjenværende ukene som er ledige.
   const faste = useMemo(() => {
     const ut = new Map<string, { ledige: string[]; uker: number }>();
     if (!belegg || !na) return ut;
-    for (let dag = 1; dag <= 7; dag++) {
-      const dagens = ALLE_DATOER.filter(d => ukedag(d) === dag);
+    for (let d = 1; d <= 7; d++) {
+      const dagens = ALLE_DATOER.filter(x => ukedag(x) === d);
       for (const t of TIMER) {
-        const kommende = dagens.filter(d => slot(d, t, belegg, na).tilstand !== 'passert');
-        const ledige = kommende.filter(d => slot(d, t, belegg, na).ledigeHalvdeler >= trengs);
-        if (ledige.length >= 2) ut.set(`${dag}|${t}`, { ledige, uker: kommende.length });
+        const kommende = dagens.filter(x => slot(x, t, belegg, na).tilstand !== 'passert');
+        const ledige = kommende.filter(x => slot(x, t, belegg, na).ledigeHalvdeler >= trengs);
+        if (ledige.length >= 2) ut.set(`${d}|${t}`, { ledige, uker: kommende.length });
       }
     }
     return ut;
@@ -140,14 +182,30 @@ export function BookingClient() {
     );
   }
 
+  const mandag = mandagI(dag);
   const uke = datoer(mandag, leggTilDager(mandag, 6));
-  const forste = mandagI(na && na.dato > SESONG.fra ? na.dato : SESONG.fra);
-  const siste = mandagI(SESONG.til);
-  const ledigeIUka = uke.reduce((n, d) => n + TIMER.filter(t => ledig(d, t)).length, 0);
-  // Timer som er fulle hele uka (f.eks. A-lagets formiddag) tar bare plass.
-  const synligeTimer = TIMER.filter(t => visning === 'fast'
-    ? [1, 2, 3, 4, 5, 6, 7].some(dag => faste.has(`${dag}|${t}`))
-    : uke.some(d => ledig(d, t) || valgtPaa(d, t)));
+  const forsteMandag = mandagI(iDag > SESONG.fra ? iDag : SESONG.fra);
+  const sisteMandag = mandagI(SESONG.til);
+
+  function blaUke(delta: number) {
+    setRetning(delta > 0 ? 'fwd' : 'back');
+    const ny = datoer(leggTilDager(mandag, 7 * delta), leggTilDager(mandag, 7 * delta + 6))
+      .filter(d => d >= iDag && d >= SESONG.fra && d <= SESONG.til);
+    setDag(ny.find(d => antallLedige(d) > 0) ?? ny[0] ?? dag);
+  }
+
+  const grunn = (d: string) => (t: number) => {
+    if (!belegg || !na) return 'Opptatt';
+    const s = slot(d, t, belegg, na);
+    if (s.tilstand === 'passert') return 'Passert';
+    if (s.tilstand === 'stengt') return `Stengt${s.tekst ? ` · ${s.tekst}` : ''}`;
+    if (s.tilstand === 'halv') return 'Kun halv bane ledig';
+    return 'Opptatt';
+  };
+
+  const rader = visning === 'enkelt'
+    ? byggRader(t => ledig(dag, t) || !!valgtPaa(dag, t), grunn(dag))
+    : byggRader(t => faste.has(`${fastDag}|${t}`), () => 'Ikke ledig flere uker');
 
   return (
     <Ramme>
@@ -156,7 +214,7 @@ export function BookingClient() {
 
       <div className="kontroller">
         <div className="visning" role="tablist">
-          <button role="tab" aria-selected={visning === 'enkelt'} className={visning === 'enkelt' ? 'aktiv' : ''} onClick={() => setVisning('enkelt')}>Enkeltuker</button>
+          <button role="tab" aria-selected={visning === 'enkelt'} className={visning === 'enkelt' ? 'aktiv' : ''} onClick={() => setVisning('enkelt')}>Kalender</button>
           <button role="tab" aria-selected={visning === 'fast'} className={visning === 'fast' ? 'aktiv' : ''} onClick={() => setVisning('fast')}>Fast tid hver uke</button>
         </div>
         <div className="segment" role="group" aria-label="Banestørrelse">
@@ -168,68 +226,92 @@ export function BookingClient() {
         </div>
       </div>
 
-      {visning === 'enkelt' ? (
-        <div className="ukenav">
-          <button aria-label="Forrige uke" disabled={mandag <= forste} onClick={() => setMandag(leggTilDager(mandag, -7))}><ChevronLeft size={20} /></button>
-          <div>
-            <strong>Uke {ukenummer(mandag)}</strong>
-            <span>{dagOgManed(uke[0], true)} – {dagOgManed(uke[6], true)} · {belegg ? `${ledigeIUka} ledige` : '…'}</span>
-          </div>
-          <button aria-label="Neste uke" disabled={mandag >= siste} onClick={() => setMandag(leggTilDager(mandag, 7))}><ChevronRight size={20} /></button>
-        </div>
-      ) : (
-        <p className="hjelp">Trykk på en tid for å ta den alle ukene den er ledig resten av sesongen. Tallet er antall uker.</p>
-      )}
-
       {!belegg ? (
         <p className="laster"><Loader2 className="spinn" size={18} /> Henter ledige tider</p>
-      ) : synligeTimer.length === 0 ? (
-        <p className="tomt">Ingen ledige timer {visning === 'enkelt' ? 'denne uka' : 'flere uker på rad'} for {bane} bane.</p>
       ) : (
-        <div className="rutenett" role="grid" aria-label={visning === 'enkelt' ? `Uke ${ukenummer(mandag)}` : 'Faste ukentlige tider'}>
-          <span />
-          {uke.map((d, i) => (
-            <span key={d} className={`kolonne ${erHelg(d) ? 'helg' : ''}`}>
-              {DAGER[i]}{visning === 'enkelt' && <b>{Number(d.slice(8))}</b>}
-            </span>
-          ))}
-          {synligeTimer.map(t => (
-            <Fragment key={t}>
-              <span className="klokke">{to(t)}</span>
-              {uke.map((d, i) => {
-                if (visning === 'fast') {
-                  const f = faste.get(`${i + 1}|${t}`);
-                  if (!f) return <span key={d} className="rute tom" />;
-                  const pa = f.ledige.every(x => valgtPaa(x, t));
+        <>
+          {visning === 'enkelt' ? (
+            <>
+              <div className="uke-nav">
+                <button className="kal-nav" aria-label="Forrige uke" disabled={mandag <= forsteMandag} onClick={() => blaUke(-1)}>‹</button>
+                <span className="uke-nav-tekst">{ukeTekst(mandag, iDag)}</span>
+                <button className="kal-nav" aria-label="Neste uke" disabled={mandag >= sisteMandag} onClick={() => blaUke(1)}>›</button>
+              </div>
+              <div className={`dagstripe uke-${retning}`} key={mandag}>
+                {uke.map(d => {
+                  const b = brikke(d, iDag);
+                  const ute = d < iDag || d < SESONG.fra || d > SESONG.til;
+                  const n = ute ? 0 : antallLedige(d);
                   return (
-                    <button key={d} className={`rute ledig ${pa ? 'pa' : ''}`} aria-pressed={pa}
-                      aria-label={`${stor(dagnavn(d))}er kl. ${kl(t)}, ledig ${f.ledige.length} av ${f.uker} uker`}
-                      onClick={() => velgFast(f.ledige, t)}>
-                      {pa ? <Check size={16} /> : f.ledige.length}
+                    <button key={d} className={`dagbrikke ${d === dag ? 'valgt' : ''} ${erHelg(d) ? 'helg' : ''}`}
+                      disabled={ute} onClick={() => setDag(d)}>
+                      <span className="dagbrikke-tekst">{b.tekst}</span>
+                      <span className="dagbrikke-dato">{b.dato}</span>
+                      <span className={`dagbrikke-ledig ${n === 0 ? 'ingen' : ''}`}>{ute ? '' : n === 0 ? 'fullt' : `${n} ledig`}</span>
+                      {valgt.some(v => v.dato === d) && <span className="prikk" />}
                     </button>
                   );
-                }
-                const v = valgtPaa(d, t);
-                if (!v && !ledig(d, t)) return <span key={d} className="rute tom" />;
+                })}
+              </div>
+              <h2 className="valgt-dag">{langDato(dag)}</h2>
+            </>
+          ) : (
+            <>
+              <p className="hjelp">Velg ukedag og trykk på en tid. Du får den alle ukene den er ledig resten av sesongen.</p>
+              <div className="dagstripe">
+                {DAGER.map((n, i) => {
+                  const d = i + 1;
+                  const antall = TIMER.filter(t => faste.has(`${d}|${t}`)).length;
+                  return (
+                    <button key={n} className={`dagbrikke ${d === fastDag ? 'valgt' : ''} ${d >= 6 ? 'helg' : ''}`} onClick={() => setFastDag(d)}>
+                      <span className="dagbrikke-tekst">{n}</span>
+                      <span className={`dagbrikke-ledig ${antall === 0 ? 'ingen' : ''}`}>{antall === 0 ? 'fullt' : `${antall} tider`}</span>
+                      {valgt.some(v => ukedag(v.dato) === d) && <span className="prikk" />}
+                    </button>
+                  );
+                })}
+              </div>
+              <h2 className="valgt-dag">{stor(dagnavn(ALLE_DATOER.find(x => ukedag(x) === fastDag)!))}er</h2>
+            </>
+          )}
+
+          <div className="tidslinje">
+            {rader.map(r => {
+              if (r.type === 'opptatt') {
                 return (
-                  <button key={d} className={`rute ledig ${v ? 'pa' : ''}`} aria-pressed={!!v}
-                    aria-label={`${langDato(d)} kl. ${kl(t)}${v ? ', valgt' : ', ledig'}`}
-                    onClick={() => velg(d, t)}>
-                    {v && (v.bane === 'halv' ? '½' : <Check size={16} />)}
+                  <div key={`o${r.fra}`} className="tl-opptatt">
+                    <span className="tl-tid">{kl(r.fra, r.til)}</span>
+                    <span>{r.tekst}</span>
+                  </div>
+                );
+              }
+              const t = r.time;
+              if (visning === 'fast') {
+                const f = faste.get(`${fastDag}|${t}`)!;
+                const pa = f.ledige.every(x => valgtPaa(x, t));
+                return (
+                  <button key={t} className={`tl-ledig ${pa ? 'valgt' : ''}`} aria-pressed={pa} onClick={() => velgFast(f.ledige, t)}>
+                    <span className="tl-tid">{kl(t)}</span>
+                    <span className="tl-tekst">{pa ? `Valgt, ${f.ledige.length} uker` : `Ledig ${f.ledige.length} av ${f.uker} uker`}</span>
+                    <span className="tl-pluss">{pa ? <Check size={18} /> : '+'}</span>
                   </button>
                 );
-              })}
-            </Fragment>
-          ))}
-        </div>
+              }
+              const v = valgtPaa(dag, t);
+              return (
+                <button key={t} className={`tl-ledig ${v ? 'valgt' : ''}`} aria-pressed={!!v} onClick={() => velg(dag, t)}>
+                  <span className="tl-tid">{kl(t)}</span>
+                  <span className="tl-tekst">
+                    {v ? `Valgt, ${v.bane === 'hel' ? 'hel' : 'halv'} bane` : 'Ledig'}
+                  </span>
+                  <span className="tl-pris">{kr(prisFor(v?.bane ?? bane, dag))}</span>
+                  <span className="tl-pluss">{v ? <Check size={18} /> : '+'}</span>
+                </button>
+              );
+            })}
+          </div>
+        </>
       )}
-
-      <p className="tegnforklaring">
-        <span className="rute ledig" /> Ledig <span className="rute pa"><Check size={12} /></span> Valgt <span className="rute tom" /> Opptatt
-        <span className="pris-info">
-          {bane === 'hel' ? 'Hel' : 'Halv'} bane {kr(PRIS.ukedag[bane])} per time, helg {kr(PRIS.helg[bane])}
-        </span>
-      </p>
 
       {valgt.length > 0 && (
         <div className="bunn">
@@ -259,7 +341,7 @@ function Ramme({ children }: { children: React.ReactNode }) {
       <main className="innhold">
         <h1>Book tid på {ARENA.navn}</h1>
         <p className="ingress">
-          Vinteråpen arena {dagOgManed(SESONG.fra)} – {dagOgManed(SESONG.til)}. Trykk på de grønne rutene for å velge timer.
+          Vinteråpen arena {dagOgManed(SESONG.fra)} – {dagOgManed(SESONG.til)}. Hel bane {kr(PRIS.ukedag.hel)} per time ({kr(PRIS.helg.hel)} i helgene), halv bane {kr(PRIS.ukedag.halv)} ({kr(PRIS.helg.halv)}).
         </p>
         {children}
       </main>

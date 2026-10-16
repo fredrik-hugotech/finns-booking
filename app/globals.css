@@ -85,37 +85,61 @@ h1 { font-size: 1.6rem; color: var(--gronn); margin-bottom: 8px; }
 }
 .flere { display: block; width: 100%; margin-top: 16px; padding: 12px; border: 1px solid var(--linje); background: #fff; border-radius: 4px; color: var(--gronn); font-weight: 600; }
 
-/* Ukeskjema: dagene bortover, timene nedover */
-.kontroller { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 10px; border-bottom: 1px solid var(--linje); margin-bottom: 12px; }
+/* Kalender etter mønster fra mer.golf: ukenavigasjon, dagbrikker og tidslinje */
+.kontroller { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 10px; border-bottom: 1px solid var(--linje); margin-bottom: 16px; }
 .kontroller .visning { border-bottom: 0; margin-bottom: 0; }
 .kontroller .segment { margin-bottom: 8px; }
-.ukenav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-.ukenav div { display: grid; text-align: center; }
-.ukenav span { color: var(--dempet); font-size: 0.85rem; }
-.ukenav button { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--linje); background: #fff; border-radius: 4px; color: var(--tekst); }
-.ukenav button:disabled { opacity: 0.3; }
-.rutenett { display: grid; grid-template-columns: 34px repeat(7, 1fr); gap: 3px; }
-.kolonne { text-align: center; font-size: 0.75rem; color: var(--dempet); line-height: 1.15; padding-bottom: 2px; display: grid; }
-.kolonne b { color: var(--tekst); font-size: 0.95rem; }
-.kolonne.helg b, .kolonne.helg { color: var(--gronn-mork); }
-.klokke { font-size: 0.75rem; color: var(--dempet); text-align: right; padding-right: 4px; align-self: center; font-variant-numeric: tabular-nums; }
-.rute { height: 32px; border-radius: 3px; border: 0; padding: 0; display: grid; place-items: center; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
-.rute.tom { background: var(--flate); }
-.rute.ledig { background: #cfe6dd; color: var(--gronn-mork); border: 1px solid #9fcab9; }
-.rute.ledig:hover { background: #b5dacb; }
-.rute.pa, .rute.ledig.pa { background: var(--gronn); border-color: var(--gronn); color: #fff; font-weight: 600; }
-@media (min-width: 640px) { .rute { height: 28px; } .rutenett { grid-template-columns: 44px repeat(7, 1fr); gap: 4px; } }
-.tegnforklaring { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 0.82rem; color: var(--dempet); margin: 12px 0 0; }
-.tegnforklaring .rute { display: inline-grid; width: 18px; height: 14px; vertical-align: middle; }
-.tegnforklaring .rute + * { margin-right: 6px; }
-.pris-info { margin-left: auto; color: var(--tekst); }
+
+.uke-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 10px; }
+.uke-nav-tekst { min-width: 130px; text-align: center; font-weight: 700; }
+.kal-nav { width: 34px; height: 34px; border-radius: 999px; border: 1px solid #b9bfbb; background: #fff; font-size: 20px; line-height: 1; display: flex; align-items: center; justify-content: center; padding-bottom: 3px; }
+.kal-nav:hover:not(:disabled) { background: var(--flate); }
+.kal-nav:disabled { opacity: 0.3; cursor: default; }
+
+.dagstripe { display: flex; gap: 8px; overflow-x: auto; padding: 6px 2px 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.dagstripe::-webkit-scrollbar { display: none; }
+.dagbrikke { position: relative; flex: 1 0 auto; min-width: 64px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 10px 8px; border-radius: 12px; border: 1px solid #c6ccc8; background: #fff; }
+.dagbrikke:hover:not(:disabled) { background: var(--flate); }
+.dagbrikke:disabled { opacity: 0.35; cursor: default; }
+.dagbrikke-tekst { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--dempet); }
+.dagbrikke.helg .dagbrikke-tekst { color: var(--gronn); }
+.dagbrikke-dato { font-size: 1.02rem; font-weight: 800; }
+.dagbrikke-ledig { font-size: 0.72rem; color: var(--gronn); font-weight: 600; white-space: nowrap; }
+.dagbrikke-ledig.ingen { color: var(--dempet); font-weight: 400; }
+.dagbrikke.valgt { background: var(--gronn); border-color: var(--gronn); color: #fff; }
+.dagbrikke.valgt .dagbrikke-tekst, .dagbrikke.valgt .dagbrikke-ledig { color: #d3e7e0; }
+.dagbrikke .prikk { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--varsel); }
+@keyframes uke-fwd { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes uke-back { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+.dagstripe.uke-fwd { animation: uke-fwd 0.25s ease; }
+.dagstripe.uke-back { animation: uke-back 0.25s ease; }
+
+.valgt-dag { font-size: 1.25rem; font-weight: 800; margin: 22px 0 10px; }
+.tidslinje { display: flex; flex-direction: column; border: 1px solid var(--linje); border-radius: 12px; overflow: hidden; }
+.tl-tid { font-weight: 700; min-width: 70px; font-variant-numeric: tabular-nums; }
+/* Opptatt trer tilbake; det er de ledige timene folk leter etter */
+.tl-opptatt { display: flex; gap: 12px; padding: 8px 14px; color: var(--dempet); font-size: 0.9rem; background: var(--flate); border-top: 1px solid var(--linje); }
+.tl-opptatt .tl-tid { font-weight: 600; }
+.tl-ledig { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--linje); background: #fff; padding: 12px 14px; }
+.tidslinje > :first-child { border-top: 0; }
+.tl-ledig:hover { background: var(--gronn-lys); }
+.tl-tekst { flex: 1; color: var(--gronn); font-weight: 600; }
+.tl-pris { color: var(--dempet); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.tl-pluss { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; border: 1.5px solid var(--gronn); color: var(--gronn); font-size: 1.2rem; font-weight: 700; line-height: 1; }
+.tl-ledig.valgt { background: var(--gronn); }
+.tl-ledig.valgt .tl-tid, .tl-ledig.valgt .tl-tekst, .tl-ledig.valgt .tl-pris { color: #fff; }
+.tl-ledig.valgt .tl-pluss { background: #fff; color: var(--gronn); border-color: #fff; }
 @media (max-width: 480px) {
   h1 { font-size: 1.3rem; }
   .ingress { font-size: 0.92rem; margin-bottom: 12px; }
   main.innhold { padding-top: 16px; }
   .logo { height: 30px; }
   .topp { padding: 10px 0; }
-  .pris-info { margin-left: 0; flex-basis: 100%; }
+  .dagbrikke { min-width: 0; flex: 1 1 0; padding: 8px 2px 6px; }
+  .dagbrikke-dato { font-size: 0.95rem; }
+  .dagbrikke-tekst { font-size: 0.66rem; }
+  .dagbrikke-ledig { font-size: 0.66rem; }
+  .dagstripe { gap: 5px; }
 }
 
 /* Bunnlinje */

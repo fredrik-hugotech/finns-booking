@@ -7,14 +7,17 @@ alt som er ledig kan bookes som halv eller hel bane, én time om gangen fra
 
 ## For de som booker
 
-- **Enkeltuker**: hele uka som et rutenett (dager bortover, timer nedover).
-  Grønne ruter er ledige, trykk for å velge. Bla mellom uker med pilene.
-  Timer som er fulle hele uka skjules, så alt får plass på én mobilskjerm.
-- **Fast tid hver uke**: samme rutenett, der tallet i ruta er hvor mange uker
-  tiden er ledig resten av sesongen. Ett trykk tar alle de ukene.
-- Hel eller halv bane velges øverst. Alt du velger samles i bunnlinjen.
-- Oppsummeringen slår sammen sammenhengende timer (kl. 20–22) og like timer
-  hver uke («Søndager kl. 17–19, 17 ganger»).
+Kalenderen følger samme mønster som mer.golf:
+
+- **Ukenavigasjon** med piler (Denne uken, Neste uke, 16.–22. nov).
+- **Dagbrikker** for uka, med antall ledige timer per dag og en prikk på
+  dager der du har valgt timer.
+- **Tidslinje** for valgt dag: ledige timer med «+», opptatte timer slått
+  sammen til én dempet blokk. Trykk for å velge, trykk igjen for å fjerne.
+- **Fast tid hver uke**: brikker for mandag–søndag og samme tidslinje,
+  der hver tid viser hvor mange uker den er ledig. Ett trykk tar alle.
+- Hel eller halv bane velges øverst. Alt du velger samles i bunnlinjen,
+  og oppsummeringen slår sammen sammenhengende og ukentlige timer.
 - Bestillingen sendes som en forespørsel med referanse (SNAK-XXXXX) og blir
   bindende når betalingen er mottatt med Vipps.
 
