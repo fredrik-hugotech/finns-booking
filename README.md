@@ -7,11 +7,12 @@ alt som er ledig kan bookes som halv eller hel bane, én time om gangen fra
 
 ## For de som booker
 
-- Velg hel eller halv bane øverst, og filtrer på ukedager og før/etter kl. 17.
-- **Enkelttimer**: én linje per dag med de ledige timene som knapper. Trykk på
-  så mange du vil; valgte timer samles i bunnlinjen.
-- **Fast tid hver uke**: én linje per ukedag. Knappen viser hvor mange uker
-  tiden er ledig (f.eks. 14/17), og ett trykk tar alle de ukene.
+- **Enkeltuker**: hele uka som et rutenett (dager bortover, timer nedover).
+  Grønne ruter er ledige, trykk for å velge. Bla mellom uker med pilene.
+  Timer som er fulle hele uka skjules, så alt får plass på én mobilskjerm.
+- **Fast tid hver uke**: samme rutenett, der tallet i ruta er hvor mange uker
+  tiden er ledig resten av sesongen. Ett trykk tar alle de ukene.
+- Hel eller halv bane velges øverst. Alt du velger samles i bunnlinjen.
 - Oppsummeringen slår sammen sammenhengende timer (kl. 20–22) og like timer
   hver uke («Søndager kl. 17–19, 17 ganger»).
 - Bestillingen sendes som en forespørsel med referanse (SNAK-XXXXX) og blir

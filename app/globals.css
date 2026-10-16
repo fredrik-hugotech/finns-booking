@@ -85,6 +85,39 @@ h1 { font-size: 1.6rem; color: var(--gronn); margin-bottom: 8px; }
 }
 .flere { display: block; width: 100%; margin-top: 16px; padding: 12px; border: 1px solid var(--linje); background: #fff; border-radius: 4px; color: var(--gronn); font-weight: 600; }
 
+/* Ukeskjema: dagene bortover, timene nedover */
+.kontroller { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 10px; border-bottom: 1px solid var(--linje); margin-bottom: 12px; }
+.kontroller .visning { border-bottom: 0; margin-bottom: 0; }
+.kontroller .segment { margin-bottom: 8px; }
+.ukenav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.ukenav div { display: grid; text-align: center; }
+.ukenav span { color: var(--dempet); font-size: 0.85rem; }
+.ukenav button { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--linje); background: #fff; border-radius: 4px; color: var(--tekst); }
+.ukenav button:disabled { opacity: 0.3; }
+.rutenett { display: grid; grid-template-columns: 34px repeat(7, 1fr); gap: 3px; }
+.kolonne { text-align: center; font-size: 0.75rem; color: var(--dempet); line-height: 1.15; padding-bottom: 2px; display: grid; }
+.kolonne b { color: var(--tekst); font-size: 0.95rem; }
+.kolonne.helg b, .kolonne.helg { color: var(--gronn-mork); }
+.klokke { font-size: 0.75rem; color: var(--dempet); text-align: right; padding-right: 4px; align-self: center; font-variant-numeric: tabular-nums; }
+.rute { height: 32px; border-radius: 3px; border: 0; padding: 0; display: grid; place-items: center; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.rute.tom { background: var(--flate); }
+.rute.ledig { background: #cfe6dd; color: var(--gronn-mork); border: 1px solid #9fcab9; }
+.rute.ledig:hover { background: #b5dacb; }
+.rute.pa, .rute.ledig.pa { background: var(--gronn); border-color: var(--gronn); color: #fff; font-weight: 600; }
+@media (min-width: 640px) { .rute { height: 28px; } .rutenett { grid-template-columns: 44px repeat(7, 1fr); gap: 4px; } }
+.tegnforklaring { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 0.82rem; color: var(--dempet); margin: 12px 0 0; }
+.tegnforklaring .rute { display: inline-grid; width: 18px; height: 14px; vertical-align: middle; }
+.tegnforklaring .rute + * { margin-right: 6px; }
+.pris-info { margin-left: auto; color: var(--tekst); }
+@media (max-width: 480px) {
+  h1 { font-size: 1.3rem; }
+  .ingress { font-size: 0.92rem; margin-bottom: 12px; }
+  main.innhold { padding-top: 16px; }
+  .logo { height: 30px; }
+  .topp { padding: 10px 0; }
+  .pris-info { margin-left: 0; flex-basis: 100%; }
+}
+
 /* Bunnlinje */
 .bunn { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid var(--linje); padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); z-index: 10; }
 .bunn-innhold { max-width: 760px; margin: 0 auto; padding: 0 16px; display: flex; align-items: center; gap: 16px; }
