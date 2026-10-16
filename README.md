@@ -7,12 +7,14 @@ alt som er ledig kan bookes som halv eller hel bane, én time om gangen fra
 
 ## For de som booker
 
-- **Sesongen på ett blikk**: varmekart over hele sesongen. Mørkere grønn betyr flere ledige timer.
-- **Uke og dag**: bla mellom uker, se antall ledige timer per dag og filtrer på dag eller kveld.
-- **Halv eller hel bane**: når én halvdel er tatt kan den andre fortsatt bookes.
-- **Samme tid hver uke**: én knapp legger samme time til alle resterende uker der den er ledig.
-- **Forespørsel og Vipps**: bestillingen sendes som en forespørsel med en referanse (SNAK-XXXXX)
-  og blir bindende når betalingen er mottatt.
+- **Enkelttimer**: en liste over bare de ledige timene, uke for uke. Filtrer på
+  ukedager og før/etter kl. 17.
+- **Fast tid hver uke**: viser hvilke tider som er ledige flere uker resten av
+  sesongen. Ett trykk legger alle ledige uker i bestillingen.
+- Velg hel eller halv bane per time. Alt du velger samles i én bestilling
+  (bunnlinjen viser antall timer og sum).
+- Bestillingen sendes som en forespørsel med referanse (SNAK-XXXXX) og blir
+  bindende når betalingen er mottatt med Vipps.
 
 ## For Finns.Fairway (`/admin`)
 

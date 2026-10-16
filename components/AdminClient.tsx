@@ -25,7 +25,7 @@ function Login({ demo, onInne }: { demo: boolean; onInne: () => void }) {
     else setFeil('Feil passord.');
   }
   return (
-    <div className="side">
+    <div className="side admin">
       <div className="oppsett smal">
         <form className="kort skjema" onSubmit={logg}>
           <h2><Lock size={18} /> Admin · vinteråpen arena</h2>
@@ -73,7 +73,7 @@ function Panel({ onUt }: { onUt: () => void }) {
       .sort((a, b) => b.forste.opprettet.localeCompare(a.forste.opprettet));
   }, [bestillinger]);
 
-  if (!bestillinger) return <div className="side"><div className="laster"><Loader2 className="spinn" size={20} /> Laster …</div></div>;
+  if (!bestillinger) return <div className="side admin"><div className="laster"><Loader2 className="spinn" size={20} /> Laster …</div></div>;
 
   const aktive = bestillinger.filter(b => b.status !== 'avlyst');
   const ventende = grupper.filter(g => g.linjer.some(l => l.status === 'forespurt'));

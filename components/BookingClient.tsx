@@ -1,32 +1,61 @@
 'use client';
 
-import { Fragment, useEffect, useState } from 'react';
-import {
-  ChevronLeft, ChevronRight, Repeat, X, Check, Clock, Sun, Moon, CalendarDays, Info, Loader2, ArrowLeft,
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { X, Loader2 } from 'lucide-react';
 import { ARENA, PRIS, SESONG } from '@/lib/config';
 import {
-  TIMER, halvdeler, nokkel, prisFor, slot, type Bane, type Belegg, type Slot,
+  TIMER, nokkel, prisFor, slot, type Bane, type Belegg,
 } from '@/lib/tilgjengelighet';
 import {
-  dagOgManed, dagnavn, datoer, kr, langDato, leggTilDager, mandagI, tidsrom, ukenummer,
+  dagOgManed, dagnavn, datoer, kr, langDato, mandagI, ukedag, ukenummer,
 } from '@/lib/dato';
 import { Retningslinjer } from './Retningslinjer';
 
 type Valgt = { dato: string; time: number; bane: Bane };
-type Filter = 'alle' | 'dag' | 'kveld';
+type Visning = 'enkelt' | 'fast';
+type Tid = 'alle' | 'dag' | 'kveld';
+type Na = { dato: string; time: number };
 type Kvittering = { ref: string; antall: number; sum: number; linjer: Valgt[] };
 
+const DAGER = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
+const ALLE_DATOER = datoer(SESONG.fra, SESONG.til);
+const UKER_PER_SIDE = 3;
+
 const vKey = (v: { dato: string; time: number }) => nokkel(v.dato, v.time);
+const sorter = (l: Valgt[]) => [...l].sort((a, b) => vKey(a).localeCompare(vKey(b)));
+const kl = (t: number) => `${String(t).padStart(2, '0')}–${String(t + 1).padStart(2, '0')}`;
+const stor = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// Slår sammen like timer (samme ukedag, tid og bane) til én linje.
+function grupper(linjer: Valgt[]): Valgt[][] {
+  const m = new Map<string, Valgt[]>();
+  for (const l of sorter(linjer)) {
+    const k = `${ukedag(l.dato)}|${l.time}|${l.bane}`;
+    m.set(k, [...(m.get(k) ?? []), l]);
+  }
+  return [...m.values()].sort((a, b) => vKey(a[0]).localeCompare(vKey(b[0])));
+}
+
+function gruppetekst(ls: Valgt[]) {
+  const f = ls[0];
+  const bane = f.bane === 'hel' ? 'hel bane' : 'halv bane';
+  if (ls.length === 1) return { tittel: `${langDato(f.dato)}, kl. ${kl(f.time)}`, under: bane };
+  return {
+    tittel: `${stor(dagnavn(f.dato))}er kl. ${kl(f.time)}`,
+    under: `${bane}, ${ls.length} ganger (${dagOgManed(f.dato, true)} – ${dagOgManed(ls[ls.length - 1].dato, true)})`,
+  };
+}
 
 export function BookingClient() {
   const [belegg, setBelegg] = useState<Belegg | null>(null);
-  const [na, setNa] = useState<{ dato: string; time: number } | null>(null);
+  const [na, setNa] = useState<Na | null>(null);
   const [demo, setDemo] = useState(false);
   const [lastFeil, setLastFeil] = useState<string | null>(null);
 
-  const [dag, setDag] = useState<string>(SESONG.fra);
-  const [filter, setFilter] = useState<Filter>('alle');
+  const [visning, setVisning] = useState<Visning>('enkelt');
+  const [dager, setDager] = useState<number[]>([]);
+  const [tid, setTid] = useState<Tid>('alle');
+  const [antallUker, setAntallUker] = useState(UKER_PER_SIDE);
   const [valgt, setValgt] = useState<Valgt[]>([]);
   const [steg, setSteg] = useState<'velg' | 'skjema'>('velg');
   const [kvittering, setKvittering] = useState<Kvittering | null>(null);
@@ -40,328 +69,251 @@ export function BookingClient() {
       setNa(j.na);
       setDemo(j.demo);
       setLastFeil(null);
-      return j.na as { dato: string; time: number };
     } catch {
-      setLastFeil('Kunne ikke hente ledige tider. Sjekk nettet og prøv igjen.');
-      return null;
+      setLastFeil('Fikk ikke hentet ledige tider. Sjekk nettet og prøv igjen.');
     }
   }
+  useEffect(() => { last(); }, []);
 
-  useEffect(() => {
-    last().then(n => {
-      if (n && n.dato > SESONG.fra && n.dato <= SESONG.til) setDag(n.dato);
-    });
-  }, []);
+  const passer = (dato: string, time: number) =>
+    (dager.length === 0 || dager.includes(ukedag(dato))) &&
+    (tid === 'alle' || (tid === 'dag' ? time < 17 : time >= 17));
 
-  const slotFor = (d: string, t: number): Slot =>
-    belegg && na ? slot(d, t, belegg, na) : { dato: d, time: t, tilstand: 'utenfor', ledigeHalvdeler: 0 };
+  // Alle ledige timer i sesongen, gruppert på uke og dag.
+  const ledigeUker = useMemo(() => {
+    if (!belegg || !na) return [];
+    const uker = new Map<string, Map<string, { time: number; ledige: number }[]>>();
+    for (const d of ALLE_DATOER) {
+      for (const t of TIMER) {
+        if (!passer(d, t)) continue;
+        const s = slot(d, t, belegg, na);
+        if (s.ledigeHalvdeler === 0) continue;
+        const uke = uker.get(mandagI(d)) ?? new Map();
+        uke.set(d, [...(uke.get(d) ?? []), { time: t, ledige: s.ledigeHalvdeler }]);
+        uker.set(mandagI(d), uke);
+      }
+    }
+    return [...uker.entries()];
+  }, [belegg, na, dager, tid]);
 
-  const ledigeTimer = (d: string) => TIMER.filter(t => slotFor(d, t).ledigeHalvdeler > 0).length;
+  // Faste ukentlige tider: hvor mange av de gjenværende ukene hver
+  // kombinasjon av ukedag og time er ledig.
+  const fasteTider = useMemo(() => {
+    if (!belegg || !na) return [];
+    const ut: { dag: number; time: number; hel: string[]; halv: string[]; uker: number }[] = [];
+    for (let dag = 1; dag <= 7; dag++) {
+      const dagens = ALLE_DATOER.filter(d => ukedag(d) === dag && d >= na.dato);
+      for (const t of TIMER) {
+        if (!passer(dagens[0] ?? SESONG.fra, t) || (dager.length && !dager.includes(dag))) continue;
+        const kommende = dagens.filter(d => slot(d, t, belegg, na).tilstand !== 'passert');
+        const hel = kommende.filter(d => slot(d, t, belegg, na).ledigeHalvdeler === 2);
+        const halv = kommende.filter(d => slot(d, t, belegg, na).ledigeHalvdeler >= 1);
+        if (halv.length >= 2) ut.push({ dag, time: t, hel, halv, uker: kommende.length });
+      }
+    }
+    return ut;
+  }, [belegg, na, dager, tid]);
 
   const sum = valgt.reduce((s, v) => s + prisFor(v.bane, v.dato), 0);
+  const valgtPaa = (d: string, t: number) => valgt.find(v => v.dato === d && v.time === t);
 
   function velg(d: string, t: number, bane: Bane) {
     setValgt(prev => {
       const finnes = prev.find(v => v.dato === d && v.time === t);
-      if (finnes?.bane === bane) return prev.filter(v => v !== finnes);
       const uten = prev.filter(v => v !== finnes);
-      return [...uten, { dato: d, time: t, bane }].sort((a, b) => vKey(a).localeCompare(vKey(b)));
+      return finnes?.bane === bane ? uten : sorter([...uten, { dato: d, time: t, bane }]);
     });
   }
 
-  // Legger til samme tid og banestørrelse alle kommende uker i sesongen der
-  // det er ledig.
-  function hverUke(v: Valgt) {
-    if (!belegg || !na) return;
-    const nye: Valgt[] = [];
-    for (let d = leggTilDager(v.dato, 7); d <= SESONG.til; d = leggTilDager(d, 7)) {
-      if (valgt.some(x => x.dato === d && x.time === v.time)) continue;
-      if (slot(d, v.time, belegg, na).ledigeHalvdeler >= halvdeler(v.bane)) nye.push({ ...v, dato: d });
-    }
-    setValgt(prev => [...prev, ...nye].sort((a, b) => vKey(a).localeCompare(vKey(b))));
-  }
-
-  function ukerIgjen(v: Valgt) {
-    let ledige = 0;
-    let opptatt = 0;
-    if (!belegg || !na) return { ledige, opptatt };
-    for (let d = leggTilDager(v.dato, 7); d <= SESONG.til; d = leggTilDager(d, 7)) {
-      if (valgt.some(x => x.dato === d && x.time === v.time)) continue;
-      if (slot(d, v.time, belegg, na).ledigeHalvdeler >= halvdeler(v.bane)) ledige++;
-      else opptatt++;
-    }
-    return { ledige, opptatt };
+  // Velger (eller fjerner) samme time alle ledige uker.
+  function velgFast(datoer: string[], t: number, bane: Bane) {
+    setValgt(prev => {
+      const alleValgt = datoer.every(d => prev.some(v => v.dato === d && v.time === t && v.bane === bane));
+      const uten = prev.filter(v => !(v.time === t && datoer.includes(v.dato)));
+      return alleValgt ? uten : sorter([...uten, ...datoer.map(d => ({ dato: d, time: t, bane }))]);
+    });
   }
 
   if (kvittering) {
     return <Bekreftelse k={kvittering} onNy={() => { setKvittering(null); setValgt([]); setSteg('velg'); last(); }} />;
   }
 
-  const uke = datoer(mandagI(dag), leggTilDager(mandagI(dag), 6));
-  const forrigeUke = leggTilDager(mandagI(dag), -7);
-  const nesteUke = leggTilDager(mandagI(dag), 7);
-  const timerVist = TIMER.filter(t => filter === 'alle' || (filter === 'dag' ? t < 17 : t >= 17));
+  if (steg === 'skjema') {
+    return (
+      <Ramme>
+        <Skjema valgt={valgt} sum={sum} onTilbake={() => setSteg('velg')} onFjern={ls => setValgt(p => p.filter(v => !ls.includes(v)))}
+          onFerdig={setKvittering} onOpptatt={last} />
+      </Ramme>
+    );
+  }
+
+  const vistUker = ledigeUker.slice(0, antallUker);
 
   return (
-    <div className="side">
-      <Topp />
+    <Ramme>
+      {demo && <p className="melding">Demo: bestillinger lagres ikke permanent.</p>}
+      {lastFeil && <p className="melding feil">{lastFeil} <button className="lenke" onClick={last}>Prøv igjen</button></p>}
 
-      {demo && (
-        <div className="banner">
-          <Info size={16} /> Demo-modus: bestillinger lagres bare midlertidig til databasen er koblet til.
+      <div className="visning" role="tablist">
+        <button role="tab" aria-selected={visning === 'enkelt'} className={visning === 'enkelt' ? 'aktiv' : ''} onClick={() => setVisning('enkelt')}>Enkelttimer</button>
+        <button role="tab" aria-selected={visning === 'fast'} className={visning === 'fast' ? 'aktiv' : ''} onClick={() => setVisning('fast')}>Fast tid hver uke</button>
+      </div>
+
+      <div className="filter">
+        <div className="dagvalg" role="group" aria-label="Ukedager">
+          {DAGER.map((n, i) => {
+            const dag = i + 1;
+            const pa = dager.includes(dag);
+            return (
+              <button key={n} aria-pressed={pa} className={pa ? 'pa' : ''}
+                onClick={() => { setDager(p => pa ? p.filter(x => x !== dag) : [...p, dag]); setAntallUker(UKER_PER_SIDE); }}>
+                {n}
+              </button>
+            );
+          })}
         </div>
-      )}
-      {lastFeil && (
-        <div className="banner feil">
-          {lastFeil} <button className="lenke" onClick={() => last()}>Prøv igjen</button>
-        </div>
-      )}
+        <select aria-label="Tid på døgnet" value={tid} onChange={e => { setTid(e.target.value as Tid); setAntallUker(UKER_PER_SIDE); }}>
+          <option value="alle">Hele dagen</option>
+          <option value="dag">Før kl. 17</option>
+          <option value="kveld">Etter kl. 17</option>
+        </select>
+      </div>
 
-      {steg === 'velg' ? (
-        <div className="oppsett">
-          <main className="hoved">
-            <section className="kort">
-              <div className="kort-topp">
-                <h2><CalendarDays size={18} /> Sesongen på ett blikk</h2>
-                <span className="dempet">Mørkere grønn = flere ledige timer</span>
-              </div>
-              <Sesongkart
-                dagerMedLedig={belegg ? ledigeTimer : null}
-                valgtDag={dag}
-                naDato={na?.dato}
-                onVelg={setDag}
-              />
-            </section>
-
-            <section className="kort">
-              <div className="ukevelger">
-                <button className="ikonknapp" aria-label="Forrige uke" disabled={leggTilDager(forrigeUke, 6) < SESONG.fra}
-                  onClick={() => setDag(forrigeUke < SESONG.fra ? SESONG.fra : forrigeUke)}>
-                  <ChevronLeft size={20} />
-                </button>
-                <div className="uketittel">
-                  <strong>Uke {ukenummer(dag)}</strong>
-                  <span className="dempet">{dagOgManed(uke[0])} – {dagOgManed(uke[6])}</span>
-                </div>
-                <button className="ikonknapp" aria-label="Neste uke" disabled={nesteUke > SESONG.til}
-                  onClick={() => setDag(nesteUke)}>
-                  <ChevronRight size={20} />
-                </button>
-              </div>
-
-              <div className="dagstripe">
-                {uke.map(d => {
-                  const utenfor = d < SESONG.fra || d > SESONG.til;
-                  const n = belegg && !utenfor ? ledigeTimer(d) : 0;
-                  const antallValgt = valgt.filter(v => v.dato === d).length;
-                  return (
-                    <button key={d} className={`dag ${d === dag ? 'aktiv' : ''}`} disabled={utenfor} onClick={() => setDag(d)}>
-                      <span className="dag-navn">{dagnavn(d, true)}</span>
-                      <span className="dag-nr">{Number(d.slice(8))}</span>
-                      <span className={`dag-ledig ${n === 0 ? 'null' : ''}`}>{utenfor ? '–' : belegg ? `${n} ledig` : '…'}</span>
-                      {antallValgt > 0 && <span className="prikk" aria-label={`${antallValgt} valgt`}>{antallValgt}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="dagtopp">
-                <h2>{langDato(dag)}</h2>
-                <div className="filter" role="group" aria-label="Tid på døgnet">
-                  <button className={filter === 'alle' ? 'på' : ''} onClick={() => setFilter('alle')}><Clock size={14} /> Alle</button>
-                  <button className={filter === 'dag' ? 'på' : ''} onClick={() => setFilter('dag')}><Sun size={14} /> Dag</button>
-                  <button className={filter === 'kveld' ? 'på' : ''} onClick={() => setFilter('kveld')}><Moon size={14} /> Kveld</button>
-                </div>
-              </div>
-
-              {!belegg ? (
-                <div className="laster"><Loader2 className="spinn" size={20} /> Henter ledige tider …</div>
-              ) : (
-                <ul className="timeliste">
-                  {timerVist.map(t => {
-                    const s = slotFor(dag, t);
-                    const mitt = valgt.find(v => v.dato === dag && v.time === t);
-                    // Belegget teller ikke med eget valg, så hel/halv kan byttes fritt.
-                    const kap = s.ledigeHalvdeler;
-                    const kanVelge = kap > 0;
+      {!belegg ? (
+        <p className="laster"><Loader2 className="spinn" size={18} /> Henter ledige tider</p>
+      ) : visning === 'enkelt' ? (
+        ledigeUker.length === 0 ? (
+          <p className="tomt">Ingen ledige timer med dette utvalget.</p>
+        ) : (
+          <>
+            {vistUker.map(([mandag, dagerIUka]) => (
+              <section key={mandag} className="uke">
+                <h2>Uke {ukenummer(mandag)}</h2>
+                {[...dagerIUka.entries()].map(([d, timer]) => (
+                  <div key={d} className="dag">
+                    <h3>{langDato(d)}</h3>
+                    <ul>
+                      {timer.map(({ time: t, ledige }) => (
+                        <Rad key={t} tekst={`kl. ${kl(t)}`} merknad={ledige === 1 ? 'Kun halv bane' : undefined}
+                          dato={d} kanHel={ledige === 2} valgt={valgtPaa(d, t)?.bane}
+                          onVelg={b => velg(d, t, b)} />
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </section>
+            ))}
+            {ledigeUker.length > antallUker && (
+              <button className="flere" onClick={() => setAntallUker(n => n + UKER_PER_SIDE)}>
+                Vis flere uker ({ledigeUker.length - antallUker} igjen)
+              </button>
+            )}
+          </>
+        )
+      ) : fasteTider.length === 0 ? (
+        <p className="tomt">Ingen faste tider er ledige flere uker med dette utvalget.</p>
+      ) : (
+        <>
+          <p className="hjelp">Velg en tid, så legges alle ledige uker resten av sesongen i bestillingen.</p>
+          {[1, 2, 3, 4, 5, 6, 7].map(dag => {
+            const rader = fasteTider.filter(f => f.dag === dag);
+            if (!rader.length) return null;
+            const eksempel = rader[0].halv[0];
+            return (
+              <section key={dag} className="dag">
+                <h3>{stor(dagnavn(eksempel))}er</h3>
+                <ul>
+                  {rader.map(f => {
+                    const valgtBane = (['hel', 'halv'] as Bane[]).find(b => {
+                      const ds = b === 'hel' ? f.hel : f.halv;
+                      return ds.length > 0 && ds.every(d => valgt.some(v => v.dato === d && v.time === f.time && v.bane === b));
+                    });
                     return (
-                      <li key={t} className={`time ${s.tilstand} ${mitt ? 'valgt' : ''}`}>
-                        <div className="time-tid">
-                          {tidsrom(t)}
-                          {s.tilstand === 'halv' && !mitt && <span className="merke">Halv bane ledig</span>}
-                        </div>
-                        {kanVelge ? (
-                          <div className="time-valg">
-                            <button className={`banevalg ${mitt?.bane === 'halv' ? 'på' : ''}`} onClick={() => velg(dag, t, 'halv')}>
-                              {mitt?.bane === 'halv' && <Check size={14} />} Halv <span>{kr(prisFor('halv', dag))}</span>
-                            </button>
-                            <button className={`banevalg ${mitt?.bane === 'hel' ? 'på' : ''}`} disabled={kap < 2} onClick={() => velg(dag, t, 'hel')}>
-                              {mitt?.bane === 'hel' && <Check size={14} />} Hel <span>{kr(prisFor('hel', dag))}</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="time-info">{beskrivelse(s)}</div>
-                        )}
-                      </li>
+                      <Rad key={f.time} tekst={`kl. ${kl(f.time)}`} dato={eksempel}
+                        merknad={`Ledig ${f.halv.length} av ${f.uker} uker${f.hel.length < f.halv.length ? `, hel bane ${f.hel.length}` : ''}`}
+                        kanHel={f.hel.length >= 2} valgt={valgtBane}
+                        onVelg={b => velgFast(b === 'hel' ? f.hel : f.halv, f.time, b)} />
                     );
                   })}
                 </ul>
-              )}
-            </section>
-          </main>
-
-          <aside className="kurv kort">
-            <Kurv valgt={valgt} sum={sum} onFjern={v => setValgt(p => p.filter(x => x !== v))} onHverUke={hverUke} ukerIgjen={ukerIgjen}
-              onTom={() => setValgt([])} onVidere={() => setSteg('skjema')} />
-          </aside>
-
-          {valgt.length > 0 && (
-            <div className="bunnlinje">
-              <div>
-                <strong>{valgt.length} {valgt.length === 1 ? 'time' : 'timer'}</strong>
-                <span>{kr(sum)}</span>
-              </div>
-              <button className="knapp" onClick={() => setSteg('skjema')}>Gå videre</button>
-            </div>
-          )}
-        </div>
-      ) : (
-        <Skjema valgt={valgt} sum={sum} onTilbake={() => setSteg('velg')}
-          onFerdig={k => setKvittering(k)} onOpptatt={() => last()} />
-      )}
-
-      <footer className="fot">
-        <p>{ARENA.arrangor} · {ARENA.navn}, {ARENA.sted} · {SESONG.navn}</p>
-      </footer>
-    </div>
-  );
-}
-
-function beskrivelse(s: Slot): string {
-  switch (s.tilstand) {
-    case 'passert': return 'Passert';
-    case 'stengt': return `Stengt${s.tekst ? ` · ${s.tekst}` : ''}`;
-    case 'utenfor': return 'Utenfor sesongen';
-    default: return s.tekst ?? 'Opptatt';
-  }
-}
-
-function Topp() {
-  return (
-    <header className="topp">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/logo.png" alt="Finns.Fairway" className="logo" />
-      <div>
-        <p className="overtittel">Vinteråpen arena</p>
-        <h1>{ARENA.navn}</h1>
-        <p className="dempet">Book ledige timer {dagOgManed(SESONG.fra)} – {dagOgManed(SESONG.til)} · 08–23</p>
-      </div>
-    </header>
-  );
-}
-
-function Sesongkart({ dagerMedLedig, valgtDag, naDato, onVelg }: {
-  dagerMedLedig: ((d: string) => number) | null;
-  valgtDag: string;
-  naDato?: string;
-  onVelg: (d: string) => void;
-}) {
-  const uker: string[][] = [];
-  for (let m = mandagI(SESONG.fra); m <= SESONG.til; m = leggTilDager(m, 7)) {
-    uker.push(datoer(m, leggTilDager(m, 6)));
-  }
-  const maks = TIMER.length;
-  const dagbokstav = ['M', 'T', 'O', 'T', 'F', 'L', 'S'];
-  return (
-    <div className="sesongkart" style={{ gridTemplateColumns: `16px repeat(${uker.length}, minmax(14px, 1fr))` }}>
-      <span />
-      {uker.map(u => <span key={u[0]} className="sk-uke">{ukenummer(u[0])}</span>)}
-      {dagbokstav.map((b, i) => (
-        <Fragment key={i}>
-          <span className="sk-dag">{b}</span>
-          {uker.map(u => {
-            const d = u[i];
-            const ute = d < SESONG.fra || d > SESONG.til;
-            const forbi = !!naDato && d < naDato;
-            const n = dagerMedLedig && !ute ? dagerMedLedig(d) : 0;
-            const niva = ute ? 'ute' : forbi ? 'forbi' : n === 0 ? 'n0' : `n${Math.ceil((n / maks) * 4)}`;
-            return (
-              <button
-                key={d}
-                className={`sk-celle ${niva} ${d === valgtDag ? 'aktiv' : ''}`}
-                disabled={ute}
-                title={ute ? undefined : `${langDato(d)}: ${n} ledige timer`}
-                aria-label={ute ? undefined : `${langDato(d)}, ${n} ledige timer`}
-                onClick={() => onVelg(d)}
-              />
+              </section>
             );
           })}
-        </Fragment>
-      ))}
-    </div>
+        </>
+      )}
+
+      {valgt.length > 0 && (
+        <div className="bunn">
+          <div className="bunn-innhold">
+            <div>
+              <strong>{valgt.length} {valgt.length === 1 ? 'time' : 'timer'}</strong>
+              <span>{kr(sum)}</span>
+            </div>
+            <button className="lenke" onClick={() => setValgt([])}>Tøm</button>
+            <button className="knapp" onClick={() => { setSteg('skjema'); window.scrollTo(0, 0); }}>Fortsett</button>
+          </div>
+        </div>
+      )}
+    </Ramme>
   );
 }
 
-function Kurv({ valgt, sum, onFjern, onHverUke, ukerIgjen, onTom, onVidere }: {
-  valgt: Valgt[];
-  sum: number;
-  onFjern: (v: Valgt) => void;
-  onHverUke: (v: Valgt) => void;
-  ukerIgjen: (v: Valgt) => { ledige: number; opptatt: number };
-  onTom: () => void;
-  onVidere: () => void;
+function Rad({ tekst, merknad, dato, kanHel, valgt, onVelg }: {
+  tekst: string;
+  merknad?: string;
+  dato: string;
+  kanHel: boolean;
+  valgt?: Bane;
+  onVelg: (b: Bane) => void;
 }) {
-  if (valgt.length === 0) {
-    return (
-      <div className="kurv-tom">
-        <h2>Din bestilling</h2>
-        <p className="dempet">Velg halv eller hel bane på en ledig time. Du kan velge flere timer og dager.</p>
-        <ul className="prisliste">
-          <li><span>Hel bane</span><strong>{kr(PRIS.ukedag.hel)} / {kr(PRIS.helg.hel)}</strong></li>
-          <li><span>Halv bane</span><strong>{kr(PRIS.ukedag.halv)} / {kr(PRIS.helg.halv)}</strong></li>
-        </ul>
-        <p className="dempet prisnote">Per time, ukedag / helg.</p>
-      </div>
-    );
-  }
   return (
-    <div>
-      <div className="kort-topp">
-        <h2>Din bestilling</h2>
-        <button className="lenke" onClick={onTom}>Tøm</button>
-      </div>
-      <ul className="valgte">
-        {valgt.map(v => {
-          const { ledige, opptatt } = ukerIgjen(v);
-          return (
-            <li key={vKey(v)}>
-              <div>
-                <strong>{langDato(v.dato)}</strong>
-                <span className="dempet">{tidsrom(v.time)} · {v.bane === 'hel' ? 'Hel bane' : 'Halv bane'} · {kr(prisFor(v.bane, v.dato))}</span>
-                {ledige > 0 && (
-                  <button className="hverUke" onClick={() => onHverUke(v)}>
-                    <Repeat size={13} /> Samme tid hver uke ut sesongen (+{ledige}{opptatt ? `, ${opptatt} opptatt` : ''})
-                  </button>
-                )}
-              </div>
-              <button className="ikonknapp liten" aria-label="Fjern" onClick={() => onFjern(v)}><X size={16} /></button>
-            </li>
-          );
-        })}
-      </ul>
-      <div className="sum">
-        <span>{valgt.length} {valgt.length === 1 ? 'time' : 'timer'}</span>
-        <strong>{kr(sum)}</strong>
-      </div>
-      <button className="knapp full" onClick={onVidere}>Gå videre</button>
-    </div>
+    <li className={`rad ${valgt ? 'valgt' : ''}`}>
+      <span className="rad-tid">{tekst}</span>
+      {merknad && <span className="rad-merknad">{merknad}</span>}
+      <span className="rad-valg">
+        {kanHel && (
+          <button aria-pressed={valgt === 'hel'} className={valgt === 'hel' ? 'pa' : ''} onClick={() => onVelg('hel')}>
+            Hel <small>{kr(prisFor('hel', dato))}</small>
+          </button>
+        )}
+        <button aria-pressed={valgt === 'halv'} className={valgt === 'halv' ? 'pa' : ''} onClick={() => onVelg('halv')}>
+          Halv <small>{kr(prisFor('halv', dato))}</small>
+        </button>
+      </span>
+    </li>
   );
 }
 
-function Skjema({ valgt, sum, onTilbake, onFerdig, onOpptatt }: {
+function Ramme({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <header className="topp">
+        <div className="innhold">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Finns.Fairway" className="logo" />
+        </div>
+      </header>
+      <main className="innhold">
+        <h1>Ledige timer på {ARENA.navn}</h1>
+        <p className="ingress">
+          Vinteråpen arena {dagOgManed(SESONG.fra)} – {dagOgManed(SESONG.til)}, kl. 08–23.
+          Hel bane {kr(PRIS.ukedag.hel)} per time ({kr(PRIS.helg.hel)} i helgene),
+          halv bane {kr(PRIS.ukedag.halv)} ({kr(PRIS.helg.halv)} i helgene).
+        </p>
+        {children}
+      </main>
+      <footer className="fot innhold">
+        {ARENA.arrangor} · {ARENA.navn}, {ARENA.sted}
+      </footer>
+    </>
+  );
+}
+
+function Skjema({ valgt, sum, onTilbake, onFjern, onFerdig, onOpptatt }: {
   valgt: Valgt[];
   sum: number;
   onTilbake: () => void;
+  onFjern: (ls: Valgt[]) => void;
   onFerdig: (k: Kvittering) => void;
   onOpptatt: () => void;
 }) {
@@ -371,12 +323,11 @@ function Skjema({ valgt, sum, onTilbake, onFerdig, onOpptatt }: {
   const [feil, setFeil] = useState<{ tekst: string; opptatt?: string[] } | null>(null);
   const serie = new Set(valgt.map(v => `${v.time}|${v.bane}`)).size < valgt.length;
 
+  useEffect(() => { if (valgt.length === 0) onTilbake(); }, [valgt.length]);
+
   async function send(e: React.FormEvent) {
     e.preventDefault();
-    if (!godtatt) {
-      setFeil({ tekst: 'Du må godta retningslinjene for bruk av arenaen.' });
-      return;
-    }
+    if (!godtatt) return setFeil({ tekst: 'Du må godta retningslinjene for bruk av arenaen.' });
     setSender(true);
     setFeil(null);
     try {
@@ -405,17 +356,37 @@ function Skjema({ valgt, sum, onTilbake, onFerdig, onOpptatt }: {
   });
 
   return (
-    <div className="oppsett smal">
-      <form className="kort skjema" onSubmit={send}>
-        <button type="button" className="lenke tilbake" onClick={onTilbake}><ArrowLeft size={16} /> Endre timer</button>
-        <h2>Dine opplysninger</h2>
+    <div className="smal">
+      <button type="button" className="lenke" onClick={onTilbake}>&larr; Tilbake til ledige timer</button>
+
+      <h2 className="seksjon">Din bestilling</h2>
+      <ul className="oppsummering">
+        {grupper(valgt).map(ls => {
+          const { tittel, under } = gruppetekst(ls);
+          const pris = ls.reduce((s, v) => s + prisFor(v.bane, v.dato), 0);
+          return (
+            <li key={vKey(ls[0]) + ls[0].bane}>
+              <div>
+                <strong>{tittel}</strong>
+                <span>{under}</span>
+              </div>
+              <span className="pris">{kr(pris)}</span>
+              <button className="fjern" aria-label="Fjern" onClick={() => onFjern(ls)}><X size={16} /></button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="total"><span>Totalt, {valgt.length} {valgt.length === 1 ? 'time' : 'timer'}</span><strong>{kr(sum)}</strong></p>
+
+      <form className="skjema" onSubmit={send}>
+        <h2 className="seksjon">Kontaktinfo</h2>
         <label>Navn<input required autoComplete="name" {...felt('navn')} /></label>
         <div className="to">
           <label>Telefon<input required type="tel" autoComplete="tel" inputMode="tel" {...felt('telefon')} /></label>
           <label>E-post<input required type="email" autoComplete="email" {...felt('epost')} /></label>
         </div>
-        <label>Klubb eller lag <span className="dempet">(valgfritt)</span><input {...felt('klubb')} /></label>
-        <label>Kommentar <span className="dempet">(valgfritt)</span><textarea rows={3} {...felt('kommentar')} /></label>
+        <label>Klubb eller lag (valgfritt)<input {...felt('klubb')} /></label>
+        <label>Kommentar (valgfritt)<textarea rows={3} {...felt('kommentar')} /></label>
 
         <details className="regler">
           <summary>Retningslinjer for bruk av arenaen</summary>
@@ -426,21 +397,16 @@ function Skjema({ valgt, sum, onTilbake, onFerdig, onOpptatt }: {
           Jeg har lest og godtar retningslinjene
         </label>
 
-        <div className="oppsummering">
-          <div className="sum"><span>{valgt.length} {valgt.length === 1 ? 'time' : 'timer'}</span><strong>{kr(sum)}</strong></div>
-          <p className="dempet">Bestillingen sendes som en forespørsel. Finns.Fairway bekrefter, og den blir bindende når betalingen er mottatt.</p>
-        </div>
+        <p className="liten">Bestillingen er en forespørsel. Finns.Fairway bekrefter, og den blir bindende når betalingen er mottatt.</p>
 
         {feil && (
-          <div className="banner feil">
-            <div>
-              {feil.tekst}
-              {feil.opptatt && <ul>{feil.opptatt.map(o => <li key={o}>{o}</li>)}</ul>}
-            </div>
+          <div className="melding feil">
+            {feil.tekst}
+            {feil.opptatt && <ul>{feil.opptatt.map(o => <li key={o}>{o}</li>)}</ul>}
           </div>
         )}
-        <button className="knapp full" disabled={sender}>
-          {sender ? <><Loader2 className="spinn" size={16} /> Sender …</> : `Send bestilling · ${kr(sum)}`}
+        <button className="knapp" disabled={sender}>
+          {sender ? 'Sender …' : `Send bestilling (${kr(sum)})`}
         </button>
       </form>
     </div>
@@ -448,52 +414,35 @@ function Skjema({ valgt, sum, onTilbake, onFerdig, onOpptatt }: {
 }
 
 function Bekreftelse({ k, onNy }: { k: Kvittering; onNy: () => void }) {
-  // Samme ukedag, tid og bane slås sammen, så en sesongbooking blir én linje.
-  const grupper = new Map<string, Valgt[]>();
-  for (const l of k.linjer) {
-    const g = `${dagnavn(l.dato)}|${l.time}|${l.bane}`;
-    grupper.set(g, [...(grupper.get(g) ?? []), l]);
-  }
   return (
-    <div className="side">
-      <Topp />
-      <div className="oppsett smal">
-        <section className="kort kvittering">
-          <div className="hake"><Check size={28} /></div>
-          <h2>Takk! Forespørselen er sendt.</h2>
-          <p>Referanse: <strong className="ref">{k.ref}</strong></p>
-          <p className="dempet">Finns.Fairway går gjennom bestillingen og bekrefter den. Den blir bindende når betalingen er mottatt.</p>
+    <Ramme>
+      <div className="smal">
+        <h2 className="seksjon">Takk, forespørselen er sendt</h2>
+        <p>Referanse: <strong className="ref">{k.ref}</strong></p>
+        <p>Finns.Fairway går gjennom bestillingen og bekrefter den. Den blir bindende når betalingen er mottatt.</p>
 
-          <ul className="valgte kompakt">
-            {[...grupper.values()].map(ls => {
-              const f = ls[0];
-              const bane = f.bane === 'hel' ? 'hel bane' : 'halv bane';
-              return (
-                <li key={vKey(f)}>
-                  <strong>
-                    {ls.length === 1 ? langDato(f.dato) : `${dagnavn(f.dato).replace(/^./, c => c.toUpperCase())}er · ${ls.length} ganger`}
-                  </strong>
-                  <span className="dempet">
-                    {tidsrom(f.time)} · {bane}
-                    {ls.length > 1 && ` · ${dagOgManed(f.dato, true)} – ${dagOgManed(ls[ls.length - 1].dato, true)}`}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="sum"><span>{k.antall} {k.antall === 1 ? 'time' : 'timer'}</span><strong>{kr(k.sum)}</strong></div>
+        <ul className="oppsummering">
+          {grupper(k.linjer).map(ls => {
+            const { tittel, under } = gruppetekst(ls);
+            return (
+              <li key={vKey(ls[0]) + ls[0].bane}>
+                <div><strong>{tittel}</strong><span>{under}</span></div>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="total"><span>Totalt, {k.antall} {k.antall === 1 ? 'time' : 'timer'}</span><strong>{kr(k.sum)}</strong></p>
 
-          <div className="vipps">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/vipps-qr.png" alt="Vipps QR-kode til Finns.Fairway" width={140} height={140} />
-            <div>
-              <h3>Betal med Vipps</h3>
-              <p className="dempet">Skann koden og merk betalingen med <strong>{k.ref}</strong>.</p>
-            </div>
+        <div className="vipps">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/vipps-qr.png" alt="Vipps QR-kode til Finns.Fairway" width={132} height={132} />
+          <div>
+            <h3>Betal med Vipps</h3>
+            <p>Skann koden og skriv <strong>{k.ref}</strong> i meldingen.</p>
           </div>
-          <button className="knapp full sekundar" onClick={onNy}>Book flere timer</button>
-        </section>
+        </div>
+        <button className="knapp sekundar" onClick={onNy}>Book flere timer</button>
       </div>
-    </div>
+    </Ramme>
   );
 }
