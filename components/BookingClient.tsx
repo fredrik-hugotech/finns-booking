@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { ARENA, PRIS, SESONG } from '@/lib/config';
 import {
-  TIMER, nokkel, prisFor, slot, type Bane, type Belegg,
+  TIMER, halvdeler, nokkel, prisFor, slot, type Bane, type Belegg,
 } from '@/lib/tilgjengelighet';
 import {
   dagOgManed, dagnavn, datoer, kr, langDato, mandagI, ukedag, ukenummer,
@@ -19,31 +19,46 @@ type Kvittering = { ref: string; antall: number; sum: number; linjer: Valgt[] };
 
 const DAGER = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
 const ALLE_DATOER = datoer(SESONG.fra, SESONG.til);
-const UKER_PER_SIDE = 3;
+const UKER_PER_SIDE = 4;
 
 const vKey = (v: { dato: string; time: number }) => nokkel(v.dato, v.time);
 const sorter = (l: Valgt[]) => [...l].sort((a, b) => vKey(a).localeCompare(vKey(b)));
-const kl = (t: number) => `${String(t).padStart(2, '0')}–${String(t + 1).padStart(2, '0')}`;
+const to = (t: number) => String(t).padStart(2, '0');
+const kl = (fra: number, til = fra + 1) => `${to(fra)}–${to(til)}`;
 const stor = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const kortDato = (d: string) => `${stor(dagnavn(d, true))} ${dagOgManed(d, true)}`;
 
-// Slår sammen like timer (samme ukedag, tid og bane) til én linje.
-function grupper(linjer: Valgt[]): Valgt[][] {
-  const m = new Map<string, Valgt[]>();
-  for (const l of sorter(linjer)) {
-    const k = `${ukedag(l.dato)}|${l.time}|${l.bane}`;
-    m.set(k, [...(m.get(k) ?? []), l]);
+// Sammenhengende timer samme dag og bane blir én blokk (20–21 + 21–22 = 20–22),
+// og like blokker på samme ukedag blir én linje («Søndager kl. 17–19, 12 ganger»).
+type Linje = { tittel: string; under: string; timer: Valgt[] };
+function oppsummer(linjer: Valgt[]): Linje[] {
+  const blokker: Valgt[][] = [];
+  for (const v of sorter(linjer)) {
+    const forrige = blokker[blokker.length - 1];
+    const siste = forrige?.[forrige.length - 1];
+    if (siste && siste.dato === v.dato && siste.bane === v.bane && siste.time + 1 === v.time) forrige.push(v);
+    else blokker.push([v]);
   }
-  return [...m.values()].sort((a, b) => vKey(a[0]).localeCompare(vKey(b[0])));
-}
-
-function gruppetekst(ls: Valgt[]) {
-  const f = ls[0];
-  const bane = f.bane === 'hel' ? 'hel bane' : 'halv bane';
-  if (ls.length === 1) return { tittel: `${langDato(f.dato)}, kl. ${kl(f.time)}`, under: bane };
-  return {
-    tittel: `${stor(dagnavn(f.dato))}er kl. ${kl(f.time)}`,
-    under: `${bane}, ${ls.length} ganger (${dagOgManed(f.dato, true)} – ${dagOgManed(ls[ls.length - 1].dato, true)})`,
-  };
+  const grupper = new Map<string, Valgt[][]>();
+  for (const b of blokker) {
+    const k = `${ukedag(b[0].dato)}|${b[0].time}|${b.length}|${b[0].bane}`;
+    grupper.set(k, [...(grupper.get(k) ?? []), b]);
+  }
+  return [...grupper.values()]
+    .sort((a, b) => vKey(a[0][0]).localeCompare(vKey(b[0][0])))
+    .map(bs => {
+      const f = bs[0][0];
+      const tid = kl(f.time, f.time + bs[0].length);
+      const bane = f.bane === 'hel' ? 'hel bane' : 'halv bane';
+      const timer = bs.flat();
+      if (bs.length === 1) return { tittel: `${langDato(f.dato)}, kl. ${tid}`, under: bane, timer };
+      const sisteDato = bs[bs.length - 1][0].dato;
+      return {
+        tittel: `${stor(dagnavn(f.dato))}er kl. ${tid}`,
+        under: `${bane}, ${bs.length} ganger (${dagOgManed(f.dato, true)} – ${dagOgManed(sisteDato, true)})`,
+        timer,
+      };
+    });
 }
 
 export function BookingClient() {
@@ -53,6 +68,7 @@ export function BookingClient() {
   const [lastFeil, setLastFeil] = useState<string | null>(null);
 
   const [visning, setVisning] = useState<Visning>('enkelt');
+  const [bane, setBane] = useState<Bane>('hel');
   const [dager, setDager] = useState<number[]>([]);
   const [tid, setTid] = useState<Tid>('alle');
   const [antallUker, setAntallUker] = useState(UKER_PER_SIDE);
@@ -75,62 +91,55 @@ export function BookingClient() {
   }
   useEffect(() => { last(); }, []);
 
-  const passer = (dato: string, time: number) =>
-    (dager.length === 0 || dager.includes(ukedag(dato))) &&
-    (tid === 'alle' || (tid === 'dag' ? time < 17 : time >= 17));
+  const trengs = halvdeler(bane);
+  const passerTid = (t: number) => tid === 'alle' || (tid === 'dag' ? t < 17 : t >= 17);
+  const passerDag = (dag: number) => dager.length === 0 || dager.includes(dag);
 
-  // Alle ledige timer i sesongen, gruppert på uke og dag.
-  const ledigeUker = useMemo(() => {
+  // Ledige timer for valgt banestørrelse, gruppert på uke og dag.
+  const uker = useMemo(() => {
     if (!belegg || !na) return [];
-    const uker = new Map<string, Map<string, { time: number; ledige: number }[]>>();
+    const ut = new Map<string, { dato: string; timer: number[] }[]>();
     for (const d of ALLE_DATOER) {
-      for (const t of TIMER) {
-        if (!passer(d, t)) continue;
-        const s = slot(d, t, belegg, na);
-        if (s.ledigeHalvdeler === 0) continue;
-        const uke = uker.get(mandagI(d)) ?? new Map();
-        uke.set(d, [...(uke.get(d) ?? []), { time: t, ledige: s.ledigeHalvdeler }]);
-        uker.set(mandagI(d), uke);
-      }
+      if (!passerDag(ukedag(d))) continue;
+      const timer = TIMER.filter(t => passerTid(t) && slot(d, t, belegg, na).ledigeHalvdeler >= trengs);
+      if (!timer.length) continue;
+      ut.set(mandagI(d), [...(ut.get(mandagI(d)) ?? []), { dato: d, timer }]);
     }
-    return [...uker.entries()];
-  }, [belegg, na, dager, tid]);
+    return [...ut.entries()];
+  }, [belegg, na, dager, tid, trengs]);
 
-  // Faste ukentlige tider: hvor mange av de gjenværende ukene hver
-  // kombinasjon av ukedag og time er ledig.
-  const fasteTider = useMemo(() => {
+  // Faste tider: for hver ukedag og time, hvilke av de gjenværende ukene som er ledige.
+  const faste = useMemo(() => {
     if (!belegg || !na) return [];
-    const ut: { dag: number; time: number; hel: string[]; halv: string[]; uker: number }[] = [];
+    const ut: { dag: number; tider: { time: number; ledige: string[]; uker: number }[] }[] = [];
     for (let dag = 1; dag <= 7; dag++) {
-      const dagens = ALLE_DATOER.filter(d => ukedag(d) === dag && d >= na.dato);
-      for (const t of TIMER) {
-        if (!passer(dagens[0] ?? SESONG.fra, t) || (dager.length && !dager.includes(dag))) continue;
+      if (!passerDag(dag)) continue;
+      const dagens = ALLE_DATOER.filter(d => ukedag(d) === dag);
+      const tider = TIMER.filter(passerTid).flatMap(t => {
         const kommende = dagens.filter(d => slot(d, t, belegg, na).tilstand !== 'passert');
-        const hel = kommende.filter(d => slot(d, t, belegg, na).ledigeHalvdeler === 2);
-        const halv = kommende.filter(d => slot(d, t, belegg, na).ledigeHalvdeler >= 1);
-        if (halv.length >= 2) ut.push({ dag, time: t, hel, halv, uker: kommende.length });
-      }
+        const ledige = kommende.filter(d => slot(d, t, belegg, na).ledigeHalvdeler >= trengs);
+        return ledige.length >= 2 ? [{ time: t, ledige, uker: kommende.length }] : [];
+      });
+      if (tider.length) ut.push({ dag, tider });
     }
     return ut;
-  }, [belegg, na, dager, tid]);
+  }, [belegg, na, dager, tid, trengs]);
 
   const sum = valgt.reduce((s, v) => s + prisFor(v.bane, v.dato), 0);
   const valgtPaa = (d: string, t: number) => valgt.find(v => v.dato === d && v.time === t);
 
-  function velg(d: string, t: number, bane: Bane) {
+  function velg(d: string, t: number) {
     setValgt(prev => {
       const finnes = prev.find(v => v.dato === d && v.time === t);
-      const uten = prev.filter(v => v !== finnes);
-      return finnes?.bane === bane ? uten : sorter([...uten, { dato: d, time: t, bane }]);
+      return finnes ? prev.filter(v => v !== finnes) : sorter([...prev, { dato: d, time: t, bane }]);
     });
   }
 
-  // Velger (eller fjerner) samme time alle ledige uker.
-  function velgFast(datoer: string[], t: number, bane: Bane) {
+  function velgFast(ds: string[], t: number) {
     setValgt(prev => {
-      const alleValgt = datoer.every(d => prev.some(v => v.dato === d && v.time === t && v.bane === bane));
-      const uten = prev.filter(v => !(v.time === t && datoer.includes(v.dato)));
-      return alleValgt ? uten : sorter([...uten, ...datoer.map(d => ({ dato: d, time: t, bane }))]);
+      const alle = ds.every(d => prev.some(v => v.dato === d && v.time === t));
+      const uten = prev.filter(v => !(v.time === t && ds.includes(v.dato)));
+      return alle ? uten : sorter([...uten, ...ds.map(d => ({ dato: d, time: t, bane }))]);
     });
   }
 
@@ -141,13 +150,14 @@ export function BookingClient() {
   if (steg === 'skjema') {
     return (
       <Ramme>
-        <Skjema valgt={valgt} sum={sum} onTilbake={() => setSteg('velg')} onFjern={ls => setValgt(p => p.filter(v => !ls.includes(v)))}
+        <Skjema valgt={valgt} sum={sum} onTilbake={() => setSteg('velg')}
+          onFjern={ls => setValgt(p => p.filter(v => !ls.includes(v)))}
           onFerdig={setKvittering} onOpptatt={last} />
       </Ramme>
     );
   }
 
-  const vistUker = ledigeUker.slice(0, antallUker);
+  const nullstill = () => setAntallUker(UKER_PER_SIDE);
 
   return (
     <Ramme>
@@ -160,19 +170,26 @@ export function BookingClient() {
       </div>
 
       <div className="filter">
-        <div className="dagvalg" role="group" aria-label="Ukedager">
+        <div className="segment" role="group" aria-label="Banestørrelse">
+          {(['hel', 'halv'] as Bane[]).map(b => (
+            <button key={b} aria-pressed={bane === b} className={bane === b ? 'pa' : ''} onClick={() => { setBane(b); nullstill(); }}>
+              {b === 'hel' ? 'Hel bane' : 'Halv bane'} <small>{kr(PRIS.ukedag[b])}</small>
+            </button>
+          ))}
+        </div>
+        <div className="segment" role="group" aria-label="Ukedager">
           {DAGER.map((n, i) => {
             const dag = i + 1;
             const pa = dager.includes(dag);
             return (
-              <button key={n} aria-pressed={pa} className={pa ? 'pa' : ''}
-                onClick={() => { setDager(p => pa ? p.filter(x => x !== dag) : [...p, dag]); setAntallUker(UKER_PER_SIDE); }}>
+              <button key={n} aria-pressed={pa} className={`dagknapp ${pa ? 'pa' : ''}`}
+                onClick={() => { setDager(p => pa ? p.filter(x => x !== dag) : [...p, dag]); nullstill(); }}>
                 {n}
               </button>
             );
           })}
         </div>
-        <select aria-label="Tid på døgnet" value={tid} onChange={e => { setTid(e.target.value as Tid); setAntallUker(UKER_PER_SIDE); }}>
+        <select aria-label="Tid på døgnet" value={tid} onChange={e => { setTid(e.target.value as Tid); nullstill(); }}>
           <option value="alle">Hele dagen</option>
           <option value="dag">Før kl. 17</option>
           <option value="kveld">Etter kl. 17</option>
@@ -182,63 +199,63 @@ export function BookingClient() {
       {!belegg ? (
         <p className="laster"><Loader2 className="spinn" size={18} /> Henter ledige tider</p>
       ) : visning === 'enkelt' ? (
-        ledigeUker.length === 0 ? (
+        uker.length === 0 ? (
           <p className="tomt">Ingen ledige timer med dette utvalget.</p>
         ) : (
           <>
-            {vistUker.map(([mandag, dagerIUka]) => (
+            <p className="hjelp">Trykk på timene du vil ha. Du kan velge så mange du vil før du går videre.</p>
+            {uker.slice(0, antallUker).map(([mandag, dagerIUka]) => (
               <section key={mandag} className="uke">
                 <h2>Uke {ukenummer(mandag)}</h2>
-                {[...dagerIUka.entries()].map(([d, timer]) => (
-                  <div key={d} className="dag">
-                    <h3>{langDato(d)}</h3>
-                    <ul>
-                      {timer.map(({ time: t, ledige }) => (
-                        <Rad key={t} tekst={`kl. ${kl(t)}`} merknad={ledige === 1 ? 'Kun halv bane' : undefined}
-                          dato={d} kanHel={ledige === 2} valgt={valgtPaa(d, t)?.bane}
-                          onVelg={b => velg(d, t, b)} />
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+                <ul className="dager">
+                  {dagerIUka.map(({ dato, timer }) => (
+                    <li key={dato}>
+                      <span className="dagnavn">{kortDato(dato)}</span>
+                      <span className="tider">
+                        {timer.map(t => {
+                          const v = valgtPaa(dato, t);
+                          return (
+                            <button key={t} aria-pressed={!!v} className={v ? 'pa' : ''} onClick={() => velg(dato, t)}>
+                              {kl(t)}{v && v.bane !== bane && <small>{v.bane === 'hel' ? ' hel' : ' ½'}</small>}
+                            </button>
+                          );
+                        })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </section>
             ))}
-            {ledigeUker.length > antallUker && (
+            {uker.length > antallUker && (
               <button className="flere" onClick={() => setAntallUker(n => n + UKER_PER_SIDE)}>
-                Vis flere uker ({ledigeUker.length - antallUker} igjen)
+                Vis flere uker ({uker.length - antallUker} igjen)
               </button>
             )}
           </>
         )
-      ) : fasteTider.length === 0 ? (
+      ) : faste.length === 0 ? (
         <p className="tomt">Ingen faste tider er ledige flere uker med dette utvalget.</p>
       ) : (
         <>
-          <p className="hjelp">Velg en tid, så legges alle ledige uker resten av sesongen i bestillingen.</p>
-          {[1, 2, 3, 4, 5, 6, 7].map(dag => {
-            const rader = fasteTider.filter(f => f.dag === dag);
-            if (!rader.length) return null;
-            const eksempel = rader[0].halv[0];
-            return (
-              <section key={dag} className="dag">
-                <h3>{stor(dagnavn(eksempel))}er</h3>
-                <ul>
-                  {rader.map(f => {
-                    const valgtBane = (['hel', 'halv'] as Bane[]).find(b => {
-                      const ds = b === 'hel' ? f.hel : f.halv;
-                      return ds.length > 0 && ds.every(d => valgt.some(v => v.dato === d && v.time === f.time && v.bane === b));
-                    });
+          <p className="hjelp">Trykk på en tid for å ta den alle ukene den er ledig resten av sesongen. Tallet viser hvor mange uker.</p>
+          <ul className="dager">
+            {faste.map(({ dag, tider }) => (
+              <li key={dag}>
+                <span className="dagnavn">{stor(dagnavn(ALLE_DATOER.find(d => ukedag(d) === dag)!))}er</span>
+                <span className="tider">
+                  {tider.map(f => {
+                    const alle = f.ledige.every(d => valgtPaa(d, f.time));
                     return (
-                      <Rad key={f.time} tekst={`kl. ${kl(f.time)}`} dato={eksempel}
-                        merknad={`Ledig ${f.halv.length} av ${f.uker} uker${f.hel.length < f.halv.length ? `, hel bane ${f.hel.length}` : ''}`}
-                        kanHel={f.hel.length >= 2} valgt={valgtBane}
-                        onVelg={b => velgFast(b === 'hel' ? f.hel : f.halv, f.time, b)} />
+                      <button key={f.time} aria-pressed={alle} className={alle ? 'pa' : ''} onClick={() => velgFast(f.ledige, f.time)}
+                        title={`Ledig ${f.ledige.length} av ${f.uker} uker`}>
+                        {kl(f.time)} <small>{f.ledige.length}/{f.uker}</small>
+                      </button>
                     );
                   })}
-                </ul>
-              </section>
-            );
-          })}
+                </span>
+              </li>
+            ))}
+          </ul>
         </>
       )}
 
@@ -258,32 +275,6 @@ export function BookingClient() {
   );
 }
 
-function Rad({ tekst, merknad, dato, kanHel, valgt, onVelg }: {
-  tekst: string;
-  merknad?: string;
-  dato: string;
-  kanHel: boolean;
-  valgt?: Bane;
-  onVelg: (b: Bane) => void;
-}) {
-  return (
-    <li className={`rad ${valgt ? 'valgt' : ''}`}>
-      <span className="rad-tid">{tekst}</span>
-      {merknad && <span className="rad-merknad">{merknad}</span>}
-      <span className="rad-valg">
-        {kanHel && (
-          <button aria-pressed={valgt === 'hel'} className={valgt === 'hel' ? 'pa' : ''} onClick={() => onVelg('hel')}>
-            Hel <small>{kr(prisFor('hel', dato))}</small>
-          </button>
-        )}
-        <button aria-pressed={valgt === 'halv'} className={valgt === 'halv' ? 'pa' : ''} onClick={() => onVelg('halv')}>
-          Halv <small>{kr(prisFor('halv', dato))}</small>
-        </button>
-      </span>
-    </li>
-  );
-}
-
 function Ramme({ children }: { children: React.ReactNode }) {
   return (
     <>
@@ -297,8 +288,7 @@ function Ramme({ children }: { children: React.ReactNode }) {
         <h1>Ledige timer på {ARENA.navn}</h1>
         <p className="ingress">
           Vinteråpen arena {dagOgManed(SESONG.fra)} – {dagOgManed(SESONG.til)}, kl. 08–23.
-          Hel bane {kr(PRIS.ukedag.hel)} per time ({kr(PRIS.helg.hel)} i helgene),
-          halv bane {kr(PRIS.ukedag.halv)} ({kr(PRIS.helg.halv)} i helgene).
+          Prisene gjelder per time. Helg: hel bane {kr(PRIS.helg.hel)}, halv bane {kr(PRIS.helg.halv)}.
         </p>
         {children}
       </main>
@@ -361,20 +351,16 @@ function Skjema({ valgt, sum, onTilbake, onFjern, onFerdig, onOpptatt }: {
 
       <h2 className="seksjon">Din bestilling</h2>
       <ul className="oppsummering">
-        {grupper(valgt).map(ls => {
-          const { tittel, under } = gruppetekst(ls);
-          const pris = ls.reduce((s, v) => s + prisFor(v.bane, v.dato), 0);
-          return (
-            <li key={vKey(ls[0]) + ls[0].bane}>
-              <div>
-                <strong>{tittel}</strong>
-                <span>{under}</span>
-              </div>
-              <span className="pris">{kr(pris)}</span>
-              <button className="fjern" aria-label="Fjern" onClick={() => onFjern(ls)}><X size={16} /></button>
-            </li>
-          );
-        })}
+        {oppsummer(valgt).map(l => (
+          <li key={vKey(l.timer[0]) + l.timer.length}>
+            <div>
+              <strong>{l.tittel}</strong>
+              <span>{l.under}</span>
+            </div>
+            <span className="pris">{kr(l.timer.reduce((s, v) => s + prisFor(v.bane, v.dato), 0))}</span>
+            <button className="fjern" aria-label="Fjern" onClick={() => onFjern(l.timer)}><X size={16} /></button>
+          </li>
+        ))}
       </ul>
       <p className="total"><span>Totalt, {valgt.length} {valgt.length === 1 ? 'time' : 'timer'}</span><strong>{kr(sum)}</strong></p>
 
@@ -422,14 +408,11 @@ function Bekreftelse({ k, onNy }: { k: Kvittering; onNy: () => void }) {
         <p>Finns.Fairway går gjennom bestillingen og bekrefter den. Den blir bindende når betalingen er mottatt.</p>
 
         <ul className="oppsummering">
-          {grupper(k.linjer).map(ls => {
-            const { tittel, under } = gruppetekst(ls);
-            return (
-              <li key={vKey(ls[0]) + ls[0].bane}>
-                <div><strong>{tittel}</strong><span>{under}</span></div>
-              </li>
-            );
-          })}
+          {oppsummer(k.linjer).map(l => (
+            <li key={vKey(l.timer[0]) + l.timer.length}>
+              <div><strong>{l.tittel}</strong><span>{l.under}</span></div>
+            </li>
+          ))}
         </ul>
         <p className="total"><span>Totalt, {k.antall} {k.antall === 1 ? 'time' : 'timer'}</span><strong>{kr(k.sum)}</strong></p>
 

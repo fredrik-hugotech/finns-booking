@@ -58,30 +58,30 @@ h1 { font-size: 1.6rem; color: var(--gronn); margin-bottom: 8px; }
 .visning button { background: none; border: 0; padding: 8px 0; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--dempet); font-weight: 600; }
 .visning button.aktiv { color: var(--tekst); border-bottom-color: var(--gronn); }
 
-.filter { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
-.dagvalg { display: flex; }
-.dagvalg button { border: 1px solid var(--linje); background: #fff; padding: 6px 0; width: 44px; font-size: 0.9rem; margin-left: -1px; }
-.dagvalg button:first-child { border-radius: 4px 0 0 4px; margin-left: 0; }
-.dagvalg button:last-child { border-radius: 0 4px 4px 0; }
-.dagvalg button.pa { background: var(--gronn); border-color: var(--gronn); color: #fff; position: relative; }
+.filter { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.segment { display: flex; flex-wrap: wrap; }
+.segment button { border: 1px solid var(--linje); background: #fff; padding: 6px 12px; font-size: 0.9rem; margin-left: -1px; }
+.segment button.dagknapp { width: 44px; padding: 6px 0; }
+.segment button:first-child { border-radius: 4px 0 0 4px; margin-left: 0; }
+.segment button:last-child { border-radius: 0 4px 4px 0; }
+.segment button small { color: var(--dempet); font-size: 0.8rem; margin-left: 4px; }
+.segment button.pa { background: var(--gronn); border-color: var(--gronn); color: #fff; position: relative; }
+.segment button.pa small { color: #cfe3dd; }
 .filter select { border: 1px solid var(--linje); border-radius: 4px; padding: 6px 8px; background: #fff; }
 
-/* Liste over ledige timer */
-.uke h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dempet); padding: 18px 0 2px; }
-.dag h3 { font-size: 1rem; padding: 12px 0 4px; }
-.dag ul { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--linje); }
-.rad { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--linje); min-height: 52px; }
-.rad.valgt { background: var(--gronn-lys); box-shadow: -8px 0 0 var(--gronn-lys), 8px 0 0 var(--gronn-lys); }
-.rad-tid { font-variant-numeric: tabular-nums; min-width: 82px; }
-.rad-merknad { color: var(--dempet); font-size: 0.85rem; flex: 1; }
-.rad-valg { margin-left: auto; display: flex; gap: 6px; }
-.rad-valg button { border: 1px solid var(--gronn); color: var(--gronn); background: #fff; border-radius: 4px; padding: 6px 10px; font-weight: 600; font-size: 0.9rem; white-space: nowrap; }
-.rad-valg button small { font-weight: 400; font-size: 0.8rem; margin-left: 2px; }
-.rad-valg button.pa { background: var(--gronn); color: #fff; }
+/* Ledige timer: én linje per dag */
+.uke h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dempet); padding: 18px 0 4px; }
+.dager { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--linje); }
+.dager li { display: flex; gap: 12px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--linje); }
+.dagnavn { width: 108px; flex-shrink: 0; font-weight: 600; font-size: 0.95rem; }
+.tider { display: flex; flex-wrap: wrap; gap: 6px; }
+.tider button { border: 1px solid var(--gronn); color: var(--gronn); background: #fff; border-radius: 4px; padding: 5px 9px; font-size: 0.9rem; font-variant-numeric: tabular-nums; min-height: 36px; }
+.tider button small { font-size: 0.75rem; opacity: 0.8; }
+.tider button:hover:not(.pa) { background: var(--gronn-lys); }
+.tider button.pa { background: var(--gronn); color: #fff; }
 @media (max-width: 480px) {
-  .rad { flex-wrap: wrap; row-gap: 2px; }
-  .rad-merknad { order: 3; flex-basis: 100%; }
-  .rad-valg button small { display: none; }
+  .dager li { flex-direction: column; gap: 6px; }
+  .dagnavn { width: auto; }
 }
 .flere { display: block; width: 100%; margin-top: 16px; padding: 12px; border: 1px solid var(--linje); background: #fff; border-radius: 4px; color: var(--gronn); font-weight: 600; }
 
