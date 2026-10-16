@@ -3,7 +3,6 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node scripts/hent-bilder.mjs",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit"
