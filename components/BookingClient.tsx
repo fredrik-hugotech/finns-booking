@@ -2,9 +2,9 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
-import { ARENA, ENKELT_DAGER_FREM, SESONG } from '@/lib/config';
+import { ARENA, SESONG } from '@/lib/config';
 import {
-  TIMER, enkeltApenTil, erHelg, halvdeler, nokkel, prisFor, slot, type Bane, type Belegg,
+  TIMER, erHelg, halvdeler, nokkel, prisFor, slot, type Bane, type Belegg,
 } from '@/lib/tilgjengelighet';
 import {
   dagOgManed, dagnavn, datoer, kr, langDato, leggTilDager, mandagI, ukedag, ukenummer,
@@ -187,8 +187,7 @@ export function BookingClient() {
   const mandag = mandagI(dag);
   const uke = datoer(mandag, leggTilDager(mandag, 6));
   const forsteMandag = mandagI(iDag > SESONG.fra ? iDag : SESONG.fra);
-  const apenTil = na ? enkeltApenTil(na) : SESONG.til;
-  const sisteMandag = mandagI(apenTil < SESONG.til ? apenTil : SESONG.til);
+  const sisteMandag = mandagI(SESONG.til);
 
   // Forslag for en uke der den faste tida er tatt: halv bane samme tid,
   // ellers nærmeste ledige time samme dag med samme banestørrelse.
@@ -243,7 +242,7 @@ export function BookingClient() {
               <div className={`dagstripe uke-${retning}`} key={mandag}>
                 {uke.map(d => {
                   const b = brikke(d, iDag);
-                  const ute = d < iDag || d < SESONG.fra || d > SESONG.til || d > apenTil;
+                  const ute = d < iDag || d < SESONG.fra || d > SESONG.til;
                   const n = ute ? 0 : antallLedige(d);
                   return (
                     <button key={d} className={`dagbrikke ${d === dag ? 'valgt' : ''} ${erHelg(d) ? 'helg' : ''}`}
@@ -255,9 +254,6 @@ export function BookingClient() {
                   );
                 })}
               </div>
-              {mandag >= sisteMandag && apenTil < SESONG.til && (
-                <p className="merknad">Enkelttimer kan bookes {ENKELT_DAGER_FREM / 7} uker frem. Lenger frem: <button className="lenke" onClick={() => setVisning('fast')}>fast hver uke</button>.</p>
-              )}
               <h2 className="valgt-dag">{langDato(dag)}</h2>
             </>
           ) : (

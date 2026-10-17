@@ -18,13 +18,6 @@ export const SESONG = {
 export const FORSTE_TIME = 8;
 export const SISTE_TIME = 22;
 
-// Enkelttimer kan bookes så mange dager frem (fra sesongstart eller i dag).
-// Faste ukentlige tider kan bookes for hele sesongen, så lagene får sikret
-// seg fast tid før enkelttimer fyller opp ukene.
-export const ENKELT_DAGER_FREM = 28;
-// Så mange uker på samme ukedag og tid regnes som en fast tid.
-export const MIN_FAST_UKER = 3;
-
 // Pris per time. Helg = lørdag og søndag.
 export const PRIS = {
   ukedag: { hel: 2000, halv: 1500 },

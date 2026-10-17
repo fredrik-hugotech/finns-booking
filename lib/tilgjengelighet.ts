@@ -1,9 +1,9 @@
 // Felles regler for hva som er ledig. Brukes både i nettleseren (visning)
 // og på serveren (sjekk før en bestilling lagres), så de aldri kan spriker.
 
-import { FORSTE_TIME, SISTE_TIME, SESONG, STENGTE_DAGER, PRIS, ENKELT_DAGER_FREM, MIN_FAST_UKER } from './config';
+import { FORSTE_TIME, SISTE_TIME, SESONG, STENGTE_DAGER, PRIS } from './config';
 import { FASTE_TIDER } from './faste-tider';
-import { leggTilDager, minutter, ukedag } from './dato';
+import { minutter, ukedag } from './dato';
 
 export type Bane = 'hel' | 'halv';
 export type Status = 'forespurt' | 'bekreftet' | 'avlyst';
@@ -96,24 +96,4 @@ export function byggBelegg(bestillinger: Pick<Bestilling, 'dato' | 'time' | 'ban
     brukt[k] = (brukt[k] ?? 0) + halvdeler(b.bane);
   }
   return { brukt, sperringer };
-}
-
-// Siste dag enkelttimer kan bookes.
-export function enkeltApenTil(na: { dato: string }): string {
-  const start = na.dato > SESONG.fra ? na.dato : SESONG.fra;
-  return leggTilDager(start, ENKELT_DAGER_FREM - 1);
-}
-
-// Timer etter enkelttime-grensen er bare lov som del av en fast tid: samme
-// ukedag har en tid som går minst MIN_FAST_UKER uker i bestillingen.
-// Alternativer for opptatte uker samme ukedag regnes med i serien.
-export function utenforVindu(linjer: { dato: string; time: number }[], na: { dato: string }) {
-  const grense = enkeltApenTil(na);
-  const antall = new Map<string, number>();
-  for (const l of linjer) {
-    const k = `${ukedag(l.dato)}|${l.time}`;
-    antall.set(k, (antall.get(k) ?? 0) + 1);
-  }
-  const serieDager = new Set([...antall].filter(([, n]) => n >= MIN_FAST_UKER).map(([k]) => Number(k.split('|')[0])));
-  return linjer.filter(l => l.dato > grense && !serieDager.has(ukedag(l.dato)));
 }
