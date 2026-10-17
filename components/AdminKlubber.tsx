@@ -20,9 +20,9 @@ const tall = (n: number) => n.toLocaleString('nb-NO', { maximumFractionDigits: 1
 
 // Fast farge per klubb, så de er lette å kjenne igjen i ukeoversikten.
 const FARGER: Record<string, string> = {
-  'IK Start': 'gul', 'Donn': 'bla', 'IK Gimletroll': 'lilla', 'Akademiet': 'turkis', 'Gatelag': 'rosa', 'Finns.Fairway': 'gronn',
+  'IK Start': 'gul', 'Donn': 'bla', 'IK Gimletroll': 'lilla', 'Akademiet': 'turkis', 'Gatelag': 'rosa', 'Finns.Fairway': 'gronn', 'KKG': 'oransje',
 };
-const RESERVE = ['oransje', 'oliven', 'stein'];
+const RESERVE = ['oliven', 'stein'];
 export function klubbFarge(klubb: string) {
   if (FARGER[klubb]) return FARGER[klubb];
   let h = 0;

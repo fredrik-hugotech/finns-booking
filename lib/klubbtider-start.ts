@@ -25,6 +25,8 @@ const donn = { klubb: 'Donn', lag: null, ...K.donn };
 const gimle = { klubb: 'IK Gimletroll', lag: null, ...K.gimle };
 const akademiet = { klubb: 'Akademiet', lag: null, ...K.johan };
 const gatelag = { klubb: 'Gatelag', lag: null, ...K.johan };
+// KKG står som «Start 2/G17» i timeplanen, men er egne økter (6 halvtimer i oppsummeringen).
+const kkg = { klubb: 'KKG', lag: null, kontakt: null, telefon: null, epost: null };
 const aLag = start('A-lag', K.oyvind);
 
 const t = (dag: number, fra: string, til: string, hvem: Omit<Ny, 'dag' | 'fra' | 'til' | 'bane'>, bane: 'hel' | 'halv' = 'hel'): Ny =>
@@ -40,7 +42,7 @@ export const KLUBBTIDER_START: Ny[] = [
   t(1, '17:30', '20:30', donn),
   t(1, '20:30', '22:00', gimle),
   // Tirsdag
-  t(2, '08:00', '09:30', start('Start 2 / G17', K.johan)),
+  t(2, '08:00', '09:30', kkg),
   t(2, '10:30', '12:30', aLag),
   t(2, '16:00', '17:30', start('Kvinner 2', K.trond)),
   t(2, '17:30', '20:30', gimle),
@@ -56,7 +58,7 @@ export const KLUBBTIDER_START: Ny[] = [
   t(3, '19:00', '20:30', donn),
   t(3, '20:30', '22:00', gimle),
   // Torsdag
-  t(4, '08:00', '09:30', start('Start 2 / G17', K.johan)),
+  t(4, '08:00', '09:30', kkg),
   t(4, '10:30', '12:30', aLag),
   t(4, '16:00', '17:30', start('Kvinner', K.trond)),
   t(4, '17:30', '19:00', start('G17 / G14', K.johan)),
