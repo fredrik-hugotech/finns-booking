@@ -10,7 +10,7 @@ export const ARENA = {
 export const SESONG = {
   navn: 'Vinteråpen arena 2026/27',
   // Første og siste dag det kan bookes (begge inklusive), YYYY-MM-DD.
-  fra: '2026-11-02',
+  fra: '2026-12-01',
   til: '2027-02-28',
 };
 
