@@ -135,6 +135,13 @@ h1 { font-size: 1.5rem; color: var(--gronn); margin-bottom: 2px; }
 .tl-valg button:hover:not(.pa) { background: var(--gronn-lys); }
 .tl-valg button.pa { background: var(--gronn); color: #fff; }
 .tl-valg button.pa small { color: #d3e7e0; opacity: 1; }
+.tl-avvik { background: var(--gronn-lys); border-top: 1px dashed #b7d3c9; padding: 4px 10px 8px 14px; display: grid; gap: 2px; }
+.avvik-rad { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.85rem; color: var(--dempet); min-height: 34px; }
+.avvik-rad button { border: 1px solid var(--gronn); color: var(--gronn); background: #fff; border-radius: 6px; padding: 4px 8px; font-size: 0.82rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.avvik-rad button small { font-weight: 400; }
+.avvik-rad button.pa { background: var(--gronn); color: #fff; }
+.dempet-tekst { color: var(--dempet); font-size: 0.8rem; }
+.merknad { font-size: 0.85rem; color: var(--dempet); margin: 8px 0 0; }
 @media (max-width: 480px) {
   h1 { font-size: 1.3rem; }
   .ingress { font-size: 0.92rem; margin-bottom: 12px; }

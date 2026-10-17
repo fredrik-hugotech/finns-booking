@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { hentBestillinger, hentSperringer, lagreBestillinger, nyRef, OpptattFeil } from '@/lib/lager';
-import { byggBelegg, halvdeler, nokkel, prisFor, slot, type Bane } from '@/lib/tilgjengelighet';
-import { SESONG } from '@/lib/config';
+import { byggBelegg, halvdeler, nokkel, prisFor, slot, utenforVindu, type Bane } from '@/lib/tilgjengelighet';
+import { ENKELT_DAGER_FREM, SESONG } from '@/lib/config';
 import { erGyldigDato, langDato, naIOslo, tidsrom } from '@/lib/dato';
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +39,14 @@ export async function POST(req: Request) {
     const [bestillinger, sperringer] = await Promise.all([hentBestillinger(SESONG.fra), hentSperringer()]);
     const belegg = byggBelegg(bestillinger, sperringer);
     const na = naIOslo();
+
+    const forTidlig = utenforVindu(linjer, na);
+    if (forTidlig.length) {
+      return NextResponse.json({
+        feil: `Enkelttimer kan bookes ${ENKELT_DAGER_FREM / 7} uker frem. Velg «Fast hver uke» for tider lenger frem.`,
+        opptatt: forTidlig.map(l => `${langDato(l.dato)} ${tidsrom(l.time)}`),
+      }, { status: 400 });
+    }
 
     // Sjekk hver time mot det som allerede er tatt, inkludert tidligere linjer
     // i samme bestilling.

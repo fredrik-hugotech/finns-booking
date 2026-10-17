@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
-import { ARENA, SESONG } from '@/lib/config';
+import { ARENA, ENKELT_DAGER_FREM, SESONG } from '@/lib/config';
 import {
-  TIMER, erHelg, nokkel, prisFor, slot, type Bane, type Belegg,
+  TIMER, enkeltApenTil, erHelg, halvdeler, nokkel, prisFor, slot, type Bane, type Belegg,
 } from '@/lib/tilgjengelighet';
 import {
   dagOgManed, dagnavn, datoer, kr, langDato, leggTilDager, mandagI, ukedag, ukenummer,
@@ -136,7 +136,7 @@ export function BookingClient() {
 
   // Faste tider: for hver ukedag og time, hvilke gjenværende uker som har hel/halv bane ledig.
   const faste = useMemo(() => {
-    const ut = new Map<string, { hel: string[]; halv: string[]; uker: number }>();
+    const ut = new Map<string, { hel: string[]; halv: string[]; kommende: string[] }>();
     if (!belegg || !na) return ut;
     for (let d = 1; d <= 7; d++) {
       const dagens = ALLE_DATOER.filter(x => ukedag(x) === d);
@@ -144,7 +144,7 @@ export function BookingClient() {
         const kommende = dagens.filter(x => slot(x, t, belegg, na).tilstand !== 'passert');
         const halv = kommende.filter(x => slot(x, t, belegg, na).ledigeHalvdeler >= 1);
         const hel = kommende.filter(x => slot(x, t, belegg, na).ledigeHalvdeler === 2);
-        if (halv.length >= 2) ut.set(`${d}|${t}`, { hel, halv, uker: kommende.length });
+        if (halv.length >= 2) ut.set(`${d}|${t}`, { hel, halv, kommende });
       }
     }
     return ut;
@@ -187,7 +187,19 @@ export function BookingClient() {
   const mandag = mandagI(dag);
   const uke = datoer(mandag, leggTilDager(mandag, 6));
   const forsteMandag = mandagI(iDag > SESONG.fra ? iDag : SESONG.fra);
-  const sisteMandag = mandagI(SESONG.til);
+  const apenTil = na ? enkeltApenTil(na) : SESONG.til;
+  const sisteMandag = mandagI(apenTil < SESONG.til ? apenTil : SESONG.til);
+
+  // Forslag for en uke der den faste tida er tatt: halv bane samme tid,
+  // ellers nærmeste ledige time samme dag med samme banestørrelse.
+  function alternativ(d: string, t: number, b: Bane): { time: number; bane: Bane } | null {
+    if (b === 'hel' && kapasitet(d, t) >= 1) return { time: t, bane: 'halv' };
+    for (const dt of [1, -1, 2, -2]) {
+      const tt = t + dt;
+      if (TIMER.includes(tt) && kapasitet(d, tt) >= halvdeler(b)) return { time: tt, bane: b };
+    }
+    return null;
+  }
 
   function blaUke(delta: number) {
     setRetning(delta > 0 ? 'fwd' : 'back');
@@ -231,7 +243,7 @@ export function BookingClient() {
               <div className={`dagstripe uke-${retning}`} key={mandag}>
                 {uke.map(d => {
                   const b = brikke(d, iDag);
-                  const ute = d < iDag || d < SESONG.fra || d > SESONG.til;
+                  const ute = d < iDag || d < SESONG.fra || d > SESONG.til || d > apenTil;
                   const n = ute ? 0 : antallLedige(d);
                   return (
                     <button key={d} className={`dagbrikke ${d === dag ? 'valgt' : ''} ${erHelg(d) ? 'helg' : ''}`}
@@ -243,6 +255,9 @@ export function BookingClient() {
                   );
                 })}
               </div>
+              {mandag >= sisteMandag && apenTil < SESONG.til && (
+                <p className="merknad">Enkelttimer kan bookes {ENKELT_DAGER_FREM / 7} uker frem. Lenger frem: <button className="lenke" onClick={() => setVisning('fast')}>fast hver uke</button>.</p>
+              )}
               <h2 className="valgt-dag">{langDato(dag)}</h2>
             </>
           ) : (
@@ -281,10 +296,32 @@ export function BookingClient() {
                   const ds = b === 'hel' ? f.hel : f.halv;
                   return ds.length > 0 && ds.every(x => valgtPaa(x, t)?.bane === b);
                 });
+                const tatt = valgtBane ? f.kommende.filter(x => !(valgtBane === 'hel' ? f.hel : f.halv).includes(x)) : [];
                 return (
-                  <Tidsrad key={t} tid={kl(t)} under={`${f.halv.length} av ${f.uker} uker`} dato={fastDato}
-                    kanHel={f.hel.length >= 2} valgt={valgtBane}
-                    onVelg={b => velgFast(b === 'hel' ? f.hel : f.halv, t, b)} />
+                  <Fragment key={t}>
+                    <Tidsrad tid={kl(t)} under={f.hel.length >= 2 && f.hel.length < f.halv.length ? `hel ${f.hel.length}, halv ${f.halv.length} av ${f.kommende.length} uker` : `${f.halv.length} av ${f.kommende.length} uker`} dato={fastDato}
+                      kanHel={f.hel.length >= 2} valgt={valgtBane}
+                      onVelg={b => velgFast(b === 'hel' ? f.hel : f.halv, t, b)} />
+                    {tatt.length > 0 && (
+                      <div className="tl-avvik">
+                        {tatt.map(x => {
+                          const a = alternativ(x, t, valgtBane!);
+                          const stengt = belegg && na ? slot(x, t, belegg, na).tilstand === 'stengt' : false;
+                          const pa = a ? valgtPaa(x, a.time)?.bane === a.bane : false;
+                          return (
+                            <div key={x} className="avvik-rad">
+                              <span>{dagOgManed(x, true)} {stengt ? 'stengt' : 'opptatt'}</span>
+                              {a && !stengt ? (
+                                <button className={pa ? 'pa' : ''} aria-pressed={pa} onClick={() => velg(x, a.time, a.bane)}>
+                                  {pa && <Check size={13} />} {a.time === t ? 'Halv bane' : kl(a.time)}{a.time !== t && a.bane === 'halv' ? ' halv' : ''} <small>{kr(prisFor(a.bane, x))}</small>
+                                </button>
+                              ) : <span className="dempet-tekst">{stengt ? '' : 'ingen annen tid'}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </Fragment>
                 );
               }
               return (

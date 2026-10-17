@@ -16,7 +16,12 @@ Kalenderen følger samme mønster som mer.golf:
   den andre for å bytte. Er bare halv bane ledig, vises bare den knappen.
   Opptatte timer står i grått.
 - **Fast hver uke**: brikker for mandag–søndag og samme rader, med hvor mange
-  uker tiden er ledig. Ett trykk tar alle de ukene.
+  uker tiden er ledig. Ett trykk tar alle de ukene. Uker som allerede er tatt
+  vises under raden med et forslag (halv bane samme tid, ellers nærmeste
+  ledige time samme dag) som kan legges til med ett trykk.
+- **Faste tider går foran**: enkelttimer kan bare bookes fire uker frem
+  (`ENKELT_DAGER_FREM` i `lib/config.ts`), mens faste tider kan bookes for
+  hele sesongen. Serveren avviser enkelttimer utenfor vinduet.
 - Alt du velger samles i bunnlinjen. Oppsummeringen slår sammen
   sammenhengende og ukentlige timer.
 - Bestillingen sendes som en forespørsel med referanse (SNAK-XXXXX) og blir
