@@ -88,3 +88,14 @@ export async function slettSperring(id: string): Promise<void> {
   }
   await rpc('snak_fjern_sperring', { p_id: id });
 }
+
+export type Endringer = Partial<Pick<Bestilling, 'dato' | 'time' | 'bane' | 'pris' | 'navn' | 'telefon' | 'epost' | 'klubb' | 'kommentar'>>;
+
+export async function oppdaterBestillinger(ider: string[], endringer: Endringer): Promise<Bestilling[]> {
+  if (erDemo()) {
+    const rader = demo().bestillinger.filter(b => ider.includes(b.id));
+    for (const b of rader) Object.assign(b, endringer);
+    return rader;
+  }
+  return rpc<Bestilling[]>('snak_oppdater_bestillinger', { p_ider: ider, p_endringer: endringer });
+}

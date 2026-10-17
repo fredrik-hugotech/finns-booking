@@ -129,3 +129,25 @@ begin
   update sperringer set aktiv = false where id = p_id;
 end
 $fn$;
+
+-- Admin: endre tid, bane, pris eller kontaktinfo på én eller flere linjer.
+-- Kapasitetstriggeren over sjekker fortsatt at flyttede timer er ledige.
+create or replace function snak_oppdater_bestillinger(p_nokkel text, p_ider uuid[], p_endringer jsonb) returns setof bestillinger
+language plpgsql security definer set search_path = public as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  return query
+    update bestillinger set
+      dato      = coalesce((p_endringer->>'dato')::date, dato),
+      time      = coalesce((p_endringer->>'time')::smallint, time),
+      bane      = coalesce(p_endringer->>'bane', bane),
+      pris      = coalesce((p_endringer->>'pris')::integer, pris),
+      navn      = coalesce(p_endringer->>'navn', navn),
+      telefon   = coalesce(p_endringer->>'telefon', telefon),
+      epost     = coalesce(p_endringer->>'epost', epost),
+      klubb     = case when p_endringer ? 'klubb' then nullif(p_endringer->>'klubb', '') else klubb end,
+      kommentar = case when p_endringer ? 'kommentar' then nullif(p_endringer->>'kommentar', '') else kommentar end
+    where id = any(p_ider)
+    returning *;
+end
+$fn$;

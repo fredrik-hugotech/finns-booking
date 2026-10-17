@@ -26,10 +26,18 @@ Kalenderen følger samme mønster som mer.golf:
 
 ## For Finns.Fairway (`/admin`)
 
-- Forespørsler gruppert per bestilling, med «bekreft alle», «avslå» eller avlys enkelttimer.
-- Ukeplan med faste klubbtider, bekreftede og ventende bookinger og sperret tid.
-- Sperr tid for kampdager, vedlikehold og arrangementer.
-- Nøkkeltall: ventende forespørsler, bekreftede timer, omsetning og ledige timer igjen.
+Bygget som admin i mer.golf: sidemeny på PC, fanelinje nederst på mobil.
+
+- **Kalender**: månedsvisning med prikk på dager med bookinger (oransje når
+  noe venter). Tidslinje for valgt dag med klubbtider, sperringer og
+  bookinger. Ledige timer har «+» for å legge inn en booking selv.
+- **Handlinger på hver booking**: Bekreft, Rediger (flytt dato/tid, bytt
+  hel/halv med ny pris, endre navn og kontaktinfo for hele bestillingen),
+  Fjern, og Ring / SMS / E-post med ferdig utfylt tekst.
+- **Forespørsler**: alt som venter, med Bekreft alle og Avslå.
+- **Bookinger**: kommende bookinger dag for dag, med nøkkeltall.
+- **Kunder**: alle som har booket, med antall timer, sum, neste booking og søk.
+- **Sperringer**: sperr tid for kampdager, vedlikehold og arrangementer.
 
 ## Endre sesong, priser og faste tider
 
