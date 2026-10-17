@@ -2,31 +2,31 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
-  Check, X, LogOut, Trash2, Loader2, Lock, Inbox, CalendarDays, Ban, List, Users, Phone, Mail, MessageSquare, Pencil, Tag,
+  Check, X, LogOut, Trash2, Loader2, Lock, Inbox, CalendarDays, Ban, List, Users, Phone, Mail, MessageSquare, Pencil, Tag, Shield,
 } from 'lucide-react';
-import { SESONG, STANDARD_PRIS, type Priser } from '@/lib/config';
+import { SESONG, STANDARD_PRIS, STENGTE_DAGER, type Priser } from '@/lib/config';
 import {
-  TIMER, byggBelegg, fastTidFor, slot, type Bane, type Bestilling, type Sperring, type Status,
+  TIMER, byggBelegg, klubbHalvdeler, klubbtiderFor, slot, type Bane, type Bestilling, type Klubbtid, type Sperring, type Status,
 } from '@/lib/tilgjengelighet';
 import { PrisKontekst, usePris } from './Priser';
-import { dagOgManed, datoer, kr, langDato, leggTilDager, mandagI, naIOslo, tidsrom, ukedag } from '@/lib/dato';
+import { Klubber, Klubbrad, UkeOversikt, klubbFarge } from './AdminKlubber';
+import { dagOgManed, datoer, kr, langDato, leggTilDager, mandagI, minutter, naIOslo, tidsrom, ukedag, ukenummer } from '@/lib/dato';
 
-type Fane = 'kalender' | 'foresporsler' | 'bookinger' | 'kunder' | 'sperringer' | 'priser';
+type Fane = 'kalender' | 'foresporsler' | 'bookinger' | 'klubber' | 'kunder' | 'sperringer' | 'priser';
 const FANER: { key: Fane; navn: string; ikon: typeof Inbox }[] = [
   { key: 'kalender', navn: 'Kalender', ikon: CalendarDays },
   { key: 'foresporsler', navn: 'Forespørsler', ikon: Inbox },
   { key: 'bookinger', navn: 'Bookinger', ikon: List },
+  { key: 'klubber', navn: 'Klubber', ikon: Shield },
   { key: 'kunder', navn: 'Kunder', ikon: Users },
   { key: 'sperringer', navn: 'Sperringer', ikon: Ban },
   { key: 'priser', navn: 'Priser', ikon: Tag },
 ];
-const DAGER = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
-const MANEDER = ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'desember'];
 const STATUSTEKST: Record<Status, string> = { forespurt: 'Venter', bekreftet: 'Bekreftet', avlyst: 'Fjernet' };
 const to = (t: number) => String(t).padStart(2, '0');
 const kl = (fra: number, til = fra + 1) => `${to(fra)}–${to(til)}`;
 
-type Api = (metode: string, url: string, body?: unknown, ok?: string) => Promise<boolean>;
+export type Api = (metode: string, url: string, body?: unknown, ok?: string) => Promise<boolean>;
 
 export function AdminClient({ innlogget, demo }: { innlogget: boolean; demo: boolean }) {
   const [inne, setInne] = useState(innlogget);
@@ -61,6 +61,7 @@ function Login({ demo, onInne }: { demo: boolean; onInne: () => void }) {
 function Panel({ onUt }: { onUt: () => void }) {
   const [bestillinger, setBestillinger] = useState<Bestilling[] | null>(null);
   const [sperringer, setSperringer] = useState<Sperring[]>([]);
+  const [klubbtider, setKlubbtider] = useState<Klubbtid[]>([]);
   const [priser, setPriser] = useState<Priser>(STANDARD_PRIS);
   const [fane, setFane] = useState<Fane>('kalender');
   const [melding, setMelding] = useState<{ tekst: string; feil?: boolean } | null>(null);
@@ -70,11 +71,12 @@ function Panel({ onUt }: { onUt: () => void }) {
   });
 
   async function last() {
-    const [a, b, c] = await Promise.all([fetch('/api/admin/bestillinger'), fetch('/api/admin/sperringer'), fetch('/api/admin/priser')]);
+    const [a, b, c, d] = await Promise.all(['bestillinger', 'sperringer', 'priser', 'klubbtider'].map(x => fetch(`/api/admin/${x}`)));
     if (a.status === 401) return onUt();
-    setBestillinger((await a.json()).bestillinger);
     setSperringer((await b.json()).sperringer);
     if (c.ok) setPriser((await c.json()).priser);
+    if (d.ok) setKlubbtider((await d.json()).klubbtider);
+    setBestillinger((await a.json()).bestillinger);
   }
   useEffect(() => { last(); }, []);
 
@@ -129,6 +131,7 @@ function Panel({ onUt }: { onUt: () => void }) {
         <div className="adm-topp">
           <h1>{aktiv.navn}</h1>
           <span className="dempet">{SESONG.navn}</span>
+          <button className="lenke adm-ut-mobil" onClick={loggUt}><LogOut size={16} /> Logg ut</button>
         </div>
         {melding && <div className={`banner ${melding.feil ? 'feil' : ''}`}>{melding.tekst}</div>}
 
@@ -136,13 +139,14 @@ function Panel({ onUt }: { onUt: () => void }) {
           <div className="laster"><Loader2 className="spinn" size={20} /> Laster …</div>
         ) : (
           <>
-            {fane === 'kalender' && <Kalender dag={dag} setDag={setDag} bestillinger={aktive} alle={bestillinger} sperringer={sperringer} api={api} />}
+            {fane === 'kalender' && <Kalender dag={dag} setDag={setDag} bestillinger={aktive} alle={bestillinger} sperringer={sperringer} klubbtider={klubbtider} api={api} />}
             {fane === 'foresporsler' && (
               ventende.length === 0
                 ? <div className="kort tomt">Ingen forespørsler venter.</div>
                 : ventende.map(g => <Bestillingskort key={g[0].ref} linjer={g} alle={bestillinger} api={api} onDag={visDag} />)
             )}
-            {fane === 'bookinger' && <Bookinger bestillinger={aktive} alle={bestillinger} sperringer={sperringer} api={api} onDag={visDag} />}
+            {fane === 'bookinger' && <Bookinger bestillinger={aktive} alle={bestillinger} sperringer={sperringer} klubbtider={klubbtider} api={api} onDag={visDag} />}
+            {fane === 'klubber' && <Klubber klubbtider={klubbtider} api={api} />}
             {fane === 'kunder' && <Kunder bestillinger={aktive} alle={bestillinger} api={api} onDag={visDag} />}
             {fane === 'sperringer' && <Sperringer sperringer={sperringer} api={api} />}
             {fane === 'priser' && <Prisvalg priser={priser} api={api} />}
@@ -299,87 +303,81 @@ function NyBooking({ dato, time, kanHel, api, onFerdig }: { dato: string; time: 
   );
 }
 
-function Kalender({ dag, setDag, bestillinger, alle, sperringer, api }: {
-  dag: string; setDag: (d: string) => void; bestillinger: Bestilling[]; alle: Bestilling[]; sperringer: Sperring[]; api: Api;
+function Kalender({ dag, setDag, bestillinger, alle, sperringer, klubbtider, api }: {
+  dag: string; setDag: (d: string) => void; bestillinger: Bestilling[]; alle: Bestilling[]; sperringer: Sperring[]; klubbtider: Klubbtid[]; api: Api;
 }) {
-  const [mnd, setMnd] = useState(dag.slice(0, 7));
   const [apen, setApen] = useState<number | null>(null);
-  const belegg = useMemo(() => byggBelegg(bestillinger, sperringer), [bestillinger, sperringer]);
+  const belegg = useMemo(() => byggBelegg(bestillinger, sperringer, klubbtider), [bestillinger, sperringer, klubbtider]);
   const na = naIOslo();
+  const mandag = mandagI(dag);
+  const sondag = leggTilDager(mandag, 6);
+  const velg = (d: string) => { setDag(d < SESONG.fra ? SESONG.fra : d > SESONG.til ? SESONG.til : d); setApen(null); };
 
-  const forste = `${mnd}-01`;
-  const sisteDag = datoer(forste, leggTilDager(forste, 40)).filter(d => d.startsWith(mnd));
-  const celler = datoer(mandagI(forste), leggTilDager(mandagI(sisteDag[sisteDag.length - 1]), 6));
-  const flyttMnd = (delta: number) => {
-    const [a, m] = mnd.split('-').map(Number);
-    const d = new Date(Date.UTC(a, m - 1 + delta, 1));
-    setMnd(d.toISOString().slice(0, 7));
-  };
-
-  // Tidslinje: klubbtider og sperringer slås sammen, bookinger vises med handlinger.
-  type Rad = { type: 'blokk'; fra: number; til: number; tekst: string; sperret?: boolean } | { type: 'time'; time: number };
+  // Dagens rader i tidsrekkefølge: klubbtider med nøyaktig tid, sperringer,
+  // og hver time som har bookinger eller ledig plass.
+  type Rad = { start: number; node: React.ReactNode };
   const rader: Rad[] = [];
+  const dagensKlubber = klubbtider.filter(k => k.dag === ukedag(dag)).sort((a, b) => a.fra.localeCompare(b.fra));
+  for (const k of dagensKlubber) {
+    rader.push({ start: minutter(k.fra), node: <Klubbrad key={k.id} k={k} dato={dag} alle={klubbtider} api={api} /> });
+  }
+  let sperretTil = -1;
   for (const t of TIMER) {
     const sp = sperringer.find(s => s.dato === dag && s.fra_time <= t && s.til_time > t);
-    const fast = fastTidFor(dag, t);
-    const tekst = sp ? `Sperret · ${sp.arsak}` : fast ? (fast.lag ? `${fast.klubb} · ${fast.lag}` : fast.klubb) : null;
-    const forrige = rader[rader.length - 1];
-    if (tekst) {
-      if (forrige?.type === 'blokk' && forrige.til === t && forrige.tekst === tekst) forrige.til = t + 1;
-      else rader.push({ type: 'blokk', fra: t, til: t + 1, tekst, sperret: !!sp });
-    } else rader.push({ type: 'time', time: t });
+    if (sp) {
+      if (t >= sperretTil) {
+        rader.push({ start: t * 60, node: <div key={`s${t}`} className="tl-opptatt sperret"><span className="tl-tid">{kl(t, sp.til_time)}</span><span>Sperret · {sp.arsak}</span></div> });
+        sperretTil = sp.til_time;
+      }
+      continue;
+    }
+    const her = bestillinger.filter(b => b.dato === dag && b.time === t);
+    const s = slot(dag, t, belegg, na);
+    if (her.length === 0 && s.ledigeHalvdeler === 0) continue;
+    const delvisKlubb = klubbHalvdeler(klubbtiderFor(belegg.klubbtider, dag, t), t) > 0;
+    rader.push({
+      start: t * 60 + (delvisKlubb ? 1 : 0),
+      node: (
+        <div key={t} className="adm-time">
+          {her.map(b => <Bookingrad key={b.id} b={b} alle={alle} api={api} />)}
+          {s.ledigeHalvdeler > 0 && (
+            apen === t
+              ? <div className="adm-rad"><div className="adm-rad-hode"><span className="adm-tid">{kl(t)}</span><strong>Ny booking</strong></div><NyBooking dato={dag} time={t} kanHel={s.ledigeHalvdeler === 2} api={api} onFerdig={() => setApen(null)} /></div>
+              : <button className="adm-ledig" onClick={() => setApen(t)}><span className="adm-tid">{kl(t)}</span><span>{s.ledigeHalvdeler === 2 ? 'Ledig' : 'Halv bane ledig'}</span><span className="tl-pluss">+</span></button>
+          )}
+        </div>
+      ),
+    });
   }
+  rader.sort((a, b) => a.start - b.start);
+  const klubbIUka = [...new Set(klubbtider.map(k => k.klubb))];
 
   return (
     <div className="adm-kalender">
-      <div className="kort">
+      <div className="kort uke-kort">
         <div className="mnd-hode">
-          <button className="kal-nav" aria-label="Forrige måned" disabled={mnd <= SESONG.fra.slice(0, 7)} onClick={() => flyttMnd(-1)}>‹</button>
-          <strong>{MANEDER[Number(mnd.slice(5)) - 1]} {mnd.slice(0, 4)}</strong>
-          <button className="kal-nav" aria-label="Neste måned" disabled={mnd >= SESONG.til.slice(0, 7)} onClick={() => flyttMnd(1)}>›</button>
-          <button className="liten-knapp" onClick={() => { const d = na.dato < SESONG.fra ? SESONG.fra : na.dato; setDag(d); setMnd(d.slice(0, 7)); }}>I dag</button>
+          <button className="kal-nav" aria-label="Forrige uke" disabled={mandag <= mandagI(SESONG.fra)} onClick={() => velg(leggTilDager(dag, -7))}>‹</button>
+          <strong>Uke {ukenummer(mandag)} <span className="dempet">{dagOgManed(mandag, true)} – {dagOgManed(sondag, true)}</span></strong>
+          <button className="kal-nav" aria-label="Neste uke" disabled={sondag >= SESONG.til} onClick={() => velg(leggTilDager(dag, 7))}>›</button>
+          <input type="date" className="gaa-til" aria-label="Gå til dato" min={SESONG.fra} max={SESONG.til} value={dag} onChange={e => e.target.value && velg(e.target.value)} />
+          <button className="liten-knapp" onClick={() => velg(na.dato)}>I dag</button>
         </div>
-        <div className="mnd-grid">
-          {DAGER.map(d => <span key={d} className="mnd-ukedag">{d}</span>)}
-          {celler.map(d => {
-            const annenMnd = !d.startsWith(mnd);
-            const ute = annenMnd || d < SESONG.fra || d > SESONG.til;
-            const her = bestillinger.filter(b => b.dato === d);
-            return (
-              <button key={d} disabled={ute} className={`mnd-dag ${d === dag ? 'valgt' : ''} ${d === na.dato ? 'idag' : ''} ${ukedag(d) >= 6 ? 'helg' : ''} ${annenMnd ? 'annen' : ''}`}
-                onClick={() => { setDag(d); setApen(null); }}>
-                {annenMnd ? '' : Number(d.slice(8))}
-                {!ute && her.length > 0 && <span className={`mnd-prikk ${her.some(b => b.status === 'forespurt') ? 'venter' : ''}`} />}
-              </button>
-            );
-          })}
+        <div className="ur-rull">
+          <UkeOversikt mandag={mandag} valgt={dag} onVelg={velg} bestillinger={bestillinger} sperringer={sperringer} klubbtider={klubbtider} />
+        </div>
+        <div className="ur-forklaring">
+          {klubbIUka.map(k => <span key={k}><i className={`farge-${klubbFarge(k)}`} />{k}</span>)}
+          <span><i className="kunde bekreftet" />Booket</span>
+          <span><i className="kunde forespurt" />Venter på svar</span>
         </div>
       </div>
 
       <h2 className="valgt-dag">{langDato(dag)}</h2>
-      <div className="tidslinje">
-        {rader.map(r => {
-          if (r.type === 'blokk') {
-            return <div key={`b${r.fra}`} className={`tl-opptatt ${r.sperret ? 'sperret' : ''}`}><span className="tl-tid">{kl(r.fra, r.til)}</span><span>{r.tekst}</span></div>;
-          }
-          const t = r.time;
-          const her = bestillinger.filter(b => b.dato === dag && b.time === t);
-          const s = slot(dag, t, belegg, na);
-          return (
-            <div key={t} className="adm-time">
-              {her.map(b => <Bookingrad key={b.id} b={b} alle={alle} api={api} />)}
-              {s.ledigeHalvdeler > 0 && (
-                apen === t
-                  ? <div className="adm-rad"><div className="adm-rad-hode"><span className="adm-tid">{kl(t)}</span><strong>Ny booking</strong></div><NyBooking dato={dag} time={t} kanHel={s.ledigeHalvdeler === 2} api={api} onFerdig={() => setApen(null)} /></div>
-                  : <button className="adm-ledig" onClick={() => setApen(t)}><span className="adm-tid">{kl(t)}</span><span>{s.ledigeHalvdeler === 2 ? 'Ledig' : 'Halv bane ledig'}</span><span className="tl-pluss">+</span></button>
-              )}
-              {s.ledigeHalvdeler === 0 && her.length === 0 && (
-                <div className="tl-opptatt"><span className="tl-tid">{kl(t)}</span><span>{s.tilstand === 'passert' ? 'Passert' : s.tekst ?? ''}</span></div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {STENGTE_DAGER[dag] ? <div className="kort tomt">Stengt · {STENGTE_DAGER[dag]}</div> : (
+        <div className="tidslinje">
+          {rader.length === 0 ? <div className="tl-opptatt"><span>Ingenting denne dagen.</span></div> : rader.map(r => r.node)}
+        </div>
+      )}
     </div>
   );
 }
@@ -419,12 +417,12 @@ function Bestillingskort({ linjer, alle, api, onDag }: { linjer: Bestilling[]; a
   );
 }
 
-function Bookinger({ bestillinger, alle, sperringer, api, onDag }: { bestillinger: Bestilling[]; alle: Bestilling[]; sperringer: Sperring[]; api: Api; onDag: (d: string) => void }) {
+function Bookinger({ bestillinger, alle, sperringer, klubbtider, api, onDag }: { bestillinger: Bestilling[]; alle: Bestilling[]; sperringer: Sperring[]; klubbtider: Klubbtid[]; api: Api; onDag: (d: string) => void }) {
   const na = naIOslo();
   const kommende = bestillinger.filter(b => b.dato >= na.dato).sort((a, b) => (a.dato + to(a.time)).localeCompare(b.dato + to(b.time)));
   const dager = [...new Set(kommende.map(b => b.dato))];
   const bekreftet = bestillinger.filter(b => b.status === 'bekreftet');
-  const belegg = byggBelegg(bestillinger, sperringer);
+  const belegg = byggBelegg(bestillinger, sperringer, klubbtider);
   const ledigIgjen = datoer(SESONG.fra, SESONG.til).flatMap(d => TIMER.map(t => slot(d, t, belegg, na))).filter(s => s.ledigeHalvdeler === 2).length;
   return (
     <>

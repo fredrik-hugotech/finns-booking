@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { hentBestillinger, hentPriser, hentSperringer, lagreBestillinger, nyRef, OpptattFeil } from '@/lib/lager';
+import { hentBestillinger, hentKlubbtider, hentPriser, hentSperringer, lagreBestillinger, nyRef, OpptattFeil } from '@/lib/lager';
 import { byggBelegg, halvdeler, nokkel, prisFor, slot, type Bane } from '@/lib/tilgjengelighet';
 import { SESONG } from '@/lib/config';
 import { erGyldigDato, langDato, naIOslo, tidsrom } from '@/lib/dato';
@@ -36,8 +36,10 @@ export async function POST(req: Request) {
   }
 
   try {
-    const [bestillinger, sperringer, priser] = await Promise.all([hentBestillinger(SESONG.fra), hentSperringer(), hentPriser()]);
-    const belegg = byggBelegg(bestillinger, sperringer);
+    const [bestillinger, sperringer, priser, klubbtider] = await Promise.all([
+      hentBestillinger(SESONG.fra), hentSperringer(), hentPriser(), hentKlubbtider(),
+    ]);
+    const belegg = byggBelegg(bestillinger, sperringer, klubbtider);
     const na = naIOslo();
 
     // Sjekk hver time mot det som allerede er tatt, inkludert tidligere linjer

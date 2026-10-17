@@ -28,14 +28,17 @@ Kalenderen følger samme mønster som mer.golf:
 
 Bygget som admin i mer.golf: sidemeny på PC, fanelinje nederst på mobil.
 
-- **Kalender**: månedsvisning med prikk på dager med bookinger (oransje når
-  noe venter). Tidslinje for valgt dag med klubbtider, sperringer og
-  bookinger. Ledige timer har «+» for å legge inn en booking selv.
+- **Kalender**: ukeoversikt som regnearket, der hver halvtime viser hvem som
+  har banen (klubbene i hver sin farge, kunder med navn, venter i oransje).
+  Under: valgt dag med nøyaktige klubbtider og kontaktperson, bookinger og
+  ledige timer med «+». En klubbtid kan frigis for én dag og gis tilbake.
 - **Handlinger på hver booking**: Bekreft, Rediger (flytt dato/tid, bytt
   hel/halv med ny pris, endre navn og kontaktinfo for hele bestillingen),
   Fjern, og Ring / SMS / E-post med ferdig utfylt tekst.
 - **Forespørsler**: alt som venter, med Bekreft alle og Avslå.
 - **Bookinger**: kommende bookinger dag for dag, med nøkkeltall.
+- **Klubber**: klubbenes faste tider og kontaktpersoner. Legg til, endre og
+  fjern faste tider. Overlapper en ny tid med en booking, sier systemet fra.
 - **Kunder**: alle som har booket, med antall timer, sum, neste booking og søk.
 - **Sperringer**: sperr tid for kampdager, vedlikehold og arrangementer.
 - **Priser**: pris per time for hel og halv bane, ukedag og helg. Gjelder nye
@@ -47,7 +50,7 @@ Bygget som admin i mer.golf: sidemeny på PC, fanelinje nederst på mobil.
 |---|---|
 | Priser | Admin → Priser (standard 1990/1490 i `lib/config.ts`) |
 | Sesongstart og -slutt, åpningstid, stengte dager | `lib/config.ts` |
-| Klubbenes faste treningstider (fra regnearket «Treningstider SNAK 2026/2027») | `lib/faste-tider.ts` |
+| Klubbenes faste treningstider | Admin → Klubber (startoppsett fra Ark 2 i `lib/klubbtider-start.ts`) |
 
 ## Kjøre lokalt
 

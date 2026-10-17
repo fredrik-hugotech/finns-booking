@@ -176,3 +176,65 @@ begin
     on conflict (nokkel) do update set verdi = excluded.verdi;
 end
 $fn$;
+
+-- Klubbenes faste ukentlige tider. Endres i admin under Klubber.
+-- `unntak` er datoer der tida er frigitt og kan bookes av andre.
+create table if not exists snak_klubbtider (
+  id uuid primary key default gen_random_uuid(),
+  dag smallint not null check (dag between 1 and 7),
+  fra text not null check (fra ~ '^\d\d:[03]0$'),
+  til text not null check (til ~ '^\d\d:[03]0$' and til > fra),
+  bane text not null default 'hel' check (bane in ('hel', 'halv')),
+  klubb text not null,
+  lag text,
+  kontakt text,
+  telefon text,
+  epost text,
+  unntak date[] not null default '{}',
+  aktiv boolean not null default true,
+  opprettet timestamptz not null default now()
+);
+alter table snak_klubbtider enable row level security;
+
+create or replace function snak_hent_klubbtider(p_nokkel text) returns setof snak_klubbtider
+language plpgsql security definer set search_path = public stable as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  return query select * from snak_klubbtider where aktiv order by dag, fra, klubb;
+end
+$fn$;
+
+-- Ny (uten id) eller endret klubbtid.
+create or replace function snak_lagre_klubbtid(p_nokkel text, p_k jsonb) returns snak_klubbtider
+language plpgsql security definer set search_path = public as $fn$
+declare
+  rad snak_klubbtider;
+begin
+  perform snak_sjekk(p_nokkel);
+  if p_k->>'id' is null then
+    insert into snak_klubbtider (dag, fra, til, bane, klubb, lag, kontakt, telefon, epost, unntak)
+    values ((p_k->>'dag')::smallint, p_k->>'fra', p_k->>'til', p_k->>'bane', p_k->>'klubb', nullif(p_k->>'lag', ''),
+            nullif(p_k->>'kontakt', ''), nullif(p_k->>'telefon', ''), nullif(p_k->>'epost', ''),
+            coalesce((select array_agg(d::date) from jsonb_array_elements_text(p_k->'unntak') d), '{}'))
+    returning * into rad;
+  else
+    update snak_klubbtider set
+      dag = (p_k->>'dag')::smallint, fra = p_k->>'fra', til = p_k->>'til', bane = p_k->>'bane',
+      klubb = p_k->>'klubb', lag = nullif(p_k->>'lag', ''),
+      kontakt = nullif(p_k->>'kontakt', ''), telefon = nullif(p_k->>'telefon', ''), epost = nullif(p_k->>'epost', ''),
+      unntak = coalesce((select array_agg(d::date) from jsonb_array_elements_text(p_k->'unntak') d), '{}')
+    where id = (p_k->>'id')::uuid and aktiv
+    returning * into rad;
+  end if;
+  return rad;
+end
+$fn$;
+
+create or replace function snak_fjern_klubbtid(p_nokkel text, p_id uuid) returns void
+language plpgsql security definer set search_path = public as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  update snak_klubbtider set aktiv = false where id = p_id;
+end
+$fn$;
+-- Startdata (Ark 2) genereres fra lib/klubbtider-start.ts.

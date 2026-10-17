@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { erAdmin } from '@/lib/admin';
 import {
-  hentBestillinger, hentPriser, hentSperringer, lagreBestillinger, nyRef, oppdaterBestillinger, OpptattFeil, settStatus, type Endringer,
+  hentBestillinger, hentKlubbtider, hentPriser, hentSperringer, lagreBestillinger, nyRef, oppdaterBestillinger, OpptattFeil, settStatus, type Endringer,
 } from '@/lib/lager';
 import { byggBelegg, halvdeler, prisFor, slot, type Bane, type Status } from '@/lib/tilgjengelighet';
 import { erGyldigDato, naIOslo } from '@/lib/dato';
@@ -13,8 +13,8 @@ const tekst = (v: unknown, maks: number) => (typeof v === 'string' ? v.trim().sl
 
 // Er timen ledig for denne banestørrelsen, når vi ser bort fra bestillingene i `unntatt`?
 async function ledig(dato: string, time: number, bane: Bane, unntatt: string[] = []) {
-  const [bestillinger, sperringer] = await Promise.all([hentBestillinger(), hentSperringer()]);
-  const belegg = byggBelegg(bestillinger.filter(b => !unntatt.includes(b.id)), sperringer);
+  const [bestillinger, sperringer, klubbtider] = await Promise.all([hentBestillinger(), hentSperringer(), hentKlubbtider()]);
+  const belegg = byggBelegg(bestillinger.filter(b => !unntatt.includes(b.id)), sperringer, klubbtider);
   return slot(dato, time, belegg, naIOslo()).ledigeHalvdeler >= halvdeler(bane);
 }
 

@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID, randomInt } from 'crypto';
-import type { Bestilling, Sperring, Status } from './tilgjengelighet';
+import type { Bestilling, Klubbtid, Sperring, Status } from './tilgjengelighet';
+import { KLUBBTIDER_START } from './klubbtider-start';
 import { STANDARD_PRIS, type Priser } from './config';
 
 // Lagring: Supabase når miljøvariablene er satt, ellers minne (demo-modus,
@@ -34,7 +35,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T
 export const erDemo = () => supabase() === null;
 
 const minne = globalThis as unknown as { __snak?: { bestillinger: Bestilling[]; sperringer: Sperring[] } };
-const demoPriser = globalThis as unknown as { __snakPriser?: Priser };
+const demoEkstra = globalThis as unknown as { __snakPriser?: Priser; __snakKlubbtider?: Klubbtid[] };
 const demo = () => (minne.__snak ??= { bestillinger: [], sperringer: [] });
 
 export function nyRef(): string {
@@ -103,14 +104,42 @@ export async function oppdaterBestillinger(ider: string[], endringer: Endringer)
 }
 
 export async function hentPriser(): Promise<Priser> {
-  if (erDemo()) return (demoPriser.__snakPriser ??= STANDARD_PRIS);
+  if (erDemo()) return (demoEkstra.__snakPriser ??= STANDARD_PRIS);
   return (await rpc<Priser | null>('snak_hent_priser')) ?? STANDARD_PRIS;
 }
 
 export async function lagrePriser(priser: Priser): Promise<void> {
   if (erDemo()) {
-    demoPriser.__snakPriser = priser;
+    demoEkstra.__snakPriser = priser;
     return;
   }
   await rpc('snak_lagre_priser', { p_priser: priser });
+}
+
+export async function hentKlubbtider(): Promise<Klubbtid[]> {
+  if (erDemo()) {
+    return (demoEkstra.__snakKlubbtider ??= KLUBBTIDER_START.map(k => ({ ...k, id: randomUUID(), unntak: [] })));
+  }
+  const rader = await rpc<Klubbtid[]>('snak_hent_klubbtider');
+  return rader.map(k => ({ ...k, unntak: k.unntak ?? [] }));
+}
+
+// Ny klubbtid når id mangler, ellers endring av en eksisterende.
+export async function lagreKlubbtid(k: Omit<Klubbtid, 'id'> & { id?: string }): Promise<void> {
+  if (erDemo()) {
+    const alle = await hentKlubbtider();
+    const i = alle.findIndex(x => x.id === k.id);
+    if (i >= 0) alle[i] = { ...alle[i], ...k } as Klubbtid;
+    else alle.push({ ...k, id: randomUUID() });
+    return;
+  }
+  await rpc('snak_lagre_klubbtid', { p_k: k });
+}
+
+export async function fjernKlubbtid(id: string): Promise<void> {
+  if (erDemo()) {
+    demoEkstra.__snakKlubbtider = (await hentKlubbtider()).filter(k => k.id !== id);
+    return;
+  }
+  await rpc('snak_fjern_klubbtid', { p_id: id });
 }

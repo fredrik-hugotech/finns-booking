@@ -312,3 +312,85 @@ h1 { font-size: 1.5rem; color: var(--gronn); margin-bottom: 2px; }
 .kr-felt { display: flex; align-items: center; gap: 8px; }
 .kr-felt input { flex: 1; min-width: 0; font-variant-numeric: tabular-nums; }
 .kr-felt span { color: var(--dempet); font-size: 14px; }
+
+/* Klubbfarger: dempede, så navnene er lette å lese */
+.farge-gul { --kf: #fbf0c4; --kf-kant: #d9b84a; --kf-tekst: #5c4708; }
+.farge-bla { --kf: #dce9fb; --kf-kant: #7fa6dc; --kf-tekst: #1d3f6e; }
+.farge-lilla { --kf: #ebe3fa; --kf-kant: #a68bdb; --kf-tekst: #47307a; }
+.farge-turkis { --kf: #d8f0ec; --kf-kant: #6cbcae; --kf-tekst: #17544a; }
+.farge-rosa { --kf: #fbe2e9; --kf-kant: #df8ca5; --kf-tekst: #7a2741; }
+.farge-gronn { --kf: #e1efe9; --kf-kant: #6fa595; --kf-tekst: #00443b; }
+.farge-oransje { --kf: #fde6d2; --kf-kant: #e0995c; --kf-tekst: #6e3a0c; }
+.farge-oliven { --kf: #ebeed6; --kf-kant: #a9b064; --kf-tekst: #4b4f17; }
+.farge-stein { --kf: #e9e7e2; --kf-kant: #a8a398; --kf-tekst: #45423b; }
+
+/* Ukeoversikt i admin, som regnearket */
+.uke-kort .mnd-hode { flex-wrap: wrap; }
+.uke-kort .mnd-hode strong { min-width: 0; text-transform: none; }
+.uke-kort .mnd-hode strong .dempet { font-weight: 400; margin-left: 6px; }
+.gaa-til { margin-left: auto; padding: 5px 8px; border: 1px solid var(--linje); border-radius: 6px; font-size: 0.85rem; background: #fff; }
+.uke-kort .mnd-hode .liten-knapp { margin-left: 0; }
+.ur-rull { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+.uke-rutenett { display: grid; grid-template-columns: 34px repeat(7, minmax(64px, 1fr)); min-width: 520px; }
+.ur-hode { height: 34px; display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 0.78rem; color: var(--dempet); border: 0; background: none; width: 100%; }
+.ur-hode strong { color: var(--tekst); }
+.ur-kropp { position: relative; border-top: 1px solid var(--linje);
+  background-image: repeating-linear-gradient(to bottom, var(--linje) 0 1px, transparent 1px calc(var(--rad) * 2)); }
+.ur-tider .ur-kropp { border-top-color: transparent; background: none; }
+.ur-klokke { position: absolute; right: 6px; transform: translateY(-50%); font-size: 0.7rem; color: var(--dempet); font-variant-numeric: tabular-nums; }
+.ur-klokke:first-child { transform: none; }
+.ur-dag { border-left: 1px solid var(--linje); cursor: pointer; }
+.ur-dag.valgt { background: var(--gronn-lys); }
+.ur-dag.valgt .ur-hode { color: var(--gronn-mork); font-weight: 700; }
+.ur-dag.passert .ur-kropp { opacity: 0.55; }
+.ur-blokk { position: absolute; margin-left: 1px; padding: 0 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: 0.68rem; line-height: 12px; font-weight: 600; border-radius: 3px;
+  background: var(--kf, #fff); color: var(--kf-tekst, var(--tekst)); border-left: 3px solid var(--kf-kant, var(--linje)); }
+.ur-blokk.kunde { background: #fff; color: var(--gronn-mork); border: 1px solid var(--gronn); border-left-width: 3px; }
+.ur-blokk.kunde.forespurt { border-color: var(--varsel); color: var(--varsel); background: var(--varsel-lys); border-style: dashed; border-left-style: solid; }
+.ur-blokk.sperret, .ur-blokk.stengt { background: repeating-linear-gradient(45deg, var(--flate) 0 6px, #ecebe6 6px 12px); color: var(--dempet); border-left-color: var(--dempet); }
+.ur-forklaring { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 0.78rem; color: var(--dempet); }
+.ur-forklaring span { display: inline-flex; align-items: center; gap: 5px; }
+.ur-forklaring i { width: 12px; height: 12px; border-radius: 3px; background: var(--kf); border-left: 3px solid var(--kf-kant); }
+.ur-forklaring i.kunde { background: #fff; border: 1px solid var(--gronn); border-left-width: 3px; }
+.ur-forklaring i.kunde.forespurt { background: var(--varsel-lys); border-color: var(--varsel); border-style: dashed; border-left-style: solid; }
+
+/* Klubbtid i dagsvisningen */
+.adm-rad.klubbrad { background: #fff; box-shadow: inset 4px 0 0 var(--kf-kant); }
+.status.klubb { background: var(--kf); color: var(--kf-tekst); }
+.adm-rad.klubbrad.frigitt { box-shadow: inset 4px 0 0 var(--linje); }
+.adm-rad.klubbrad.frigitt .adm-navn strong, .adm-rad.klubbrad.frigitt .adm-tid { text-decoration: line-through; color: var(--dempet); }
+.adm-rad.klubbrad.frigitt .status.klubb { background: var(--gronn-lys); color: var(--gronn-mork); }
+.tidslinje > .adm-rad { border-top: 1px solid var(--linje); }
+.tidslinje > :first-child { border-top: 0; }
+.frigitte { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--dempet); }
+.brikke { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border: 1px solid var(--linje); border-radius: 999px; background: #fff; font-size: 0.8rem; }
+.brikke:hover { border-color: var(--feil); color: var(--feil); }
+
+/* Klubber-fanen */
+.klubb-topp { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.klubb-topp p { margin: 0; }
+.admin .kort.klubbkort { margin-bottom: 12px; border-left: 4px solid var(--kf-kant); }
+.klubbkort-hode { display: flex; align-items: baseline; justify-content: space-between; }
+.klubbkort-hode h2 { margin: 0 0 8px; }
+.klubb-kontakt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 6px 0; font-size: 0.9rem; }
+.klubb-kontakt > span:first-child { min-width: 180px; }
+.klubb-kontakt .kontaktknapper { margin-left: auto; }
+.klubbtider { list-style: none; margin: 8px 0 0; padding: 0; border-top: 1px solid var(--linje); }
+.klubbtider li { border-bottom: 1px solid var(--linje); padding: 6px 0; }
+.klubbtider li:last-child { border-bottom: 0; }
+.klubbtid-linje { display: flex; align-items: center; gap: 12px; font-size: 0.92rem; }
+.klubbtid-dag { width: 70px; color: var(--dempet); }
+.klubbtid-lag { flex: 1; display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 520px) {
+  .klubb-topp { flex-direction: column; align-items: stretch; }
+  .gaa-til { margin-left: 0; }
+}
+.adm-ut-mobil { display: none !important; }
+@media (max-width: 760px) {
+  .adm-ut { display: none !important; }
+  .adm-ut-mobil { display: inline-flex !important; color: var(--dempet); font-size: 0.85rem; }
+  .adm-topp .dempet { display: none; }
+  .adm-meny button { min-width: 0; }
+  .adm-meny button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
