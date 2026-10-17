@@ -236,7 +236,7 @@ export function BookingClient() {
             <>
               <div className="uke-nav">
                 <button className="kal-nav" aria-label="Forrige uke" disabled={mandag <= forsteMandag} onClick={() => blaUke(-1)}>‹</button>
-                <span className="uke-nav-tekst">{ukeTekst(mandag, iDag)}</span>
+                <span className="uke-nav-tekst">Uke {ukenummer(mandag)}<small>{ukeTekst(mandag, iDag)}</small></span>
                 <button className="kal-nav" aria-label="Neste uke" disabled={mandag >= sisteMandag} onClick={() => blaUke(1)}>›</button>
               </div>
               <div className={`dagstripe uke-${retning}`} key={mandag}>

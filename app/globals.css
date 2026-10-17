@@ -91,7 +91,8 @@ h1 { font-size: 1.5rem; color: var(--gronn); margin-bottom: 2px; }
 .kontroller .segment { margin-bottom: 8px; }
 
 .uke-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 10px; }
-.uke-nav-tekst { min-width: 130px; text-align: center; font-weight: 700; }
+.uke-nav-tekst { min-width: 130px; text-align: center; font-weight: 700; display: grid; line-height: 1.2; }
+.uke-nav-tekst small { font-weight: 400; font-size: 0.82rem; color: var(--dempet); }
 .kal-nav { width: 34px; height: 34px; border-radius: 999px; border: 1px solid #b9bfbb; background: #fff; font-size: 20px; line-height: 1; display: flex; align-items: center; justify-content: center; padding-bottom: 3px; }
 .kal-nav:hover:not(:disabled) { background: var(--flate); }
 .kal-nav:disabled { opacity: 0.3; cursor: default; }
