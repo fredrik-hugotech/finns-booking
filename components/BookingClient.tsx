@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
-import { ARENA, PRIS, SESONG } from '@/lib/config';
+import { ARENA, SESONG } from '@/lib/config';
 import {
-  TIMER, erHelg, halvdeler, nokkel, prisFor, slot, type Bane, type Belegg,
+  TIMER, erHelg, nokkel, prisFor, slot, type Bane, type Belegg,
 } from '@/lib/tilgjengelighet';
 import {
   dagOgManed, dagnavn, datoer, kr, langDato, leggTilDager, mandagI, ukedag, ukenummer,
@@ -98,7 +98,6 @@ export function BookingClient() {
   const [lastFeil, setLastFeil] = useState<string | null>(null);
 
   const [visning, setVisning] = useState<Visning>('enkelt');
-  const [bane, setBane] = useState<Bane>('hel');
   const [dag, setDag] = useState(SESONG.fra);
   const [fastDag, setFastDag] = useState(1);
   const [retning, setRetning] = useState<'fwd' | 'back'>('fwd');
@@ -122,48 +121,51 @@ export function BookingClient() {
     }
   }
   useEffect(() => {
-    // Start på første dag med ledig hel bane.
+    // Start på første dag med noe ledig.
     last().then(j => {
       if (!j) return;
-      const forste = ALLE_DATOER.find(d => TIMER.some(t => slot(d, t, j.belegg, j.na).ledigeHalvdeler === 2));
+      const forste = ALLE_DATOER.find(d => TIMER.some(t => slot(d, t, j.belegg, j.na).ledigeHalvdeler > 0));
       if (forste) setDag(forste);
     });
   }, []);
 
-  const trengs = halvdeler(bane);
   const iDag = na?.dato ?? SESONG.fra;
-  const ledig = (d: string, t: number) => !!belegg && !!na && slot(d, t, belegg, na).ledigeHalvdeler >= trengs;
-  const antallLedige = (d: string) => TIMER.filter(t => ledig(d, t)).length;
+  // Antall ledige halvdeler: 2 = hel bane ledig, 1 = bare halv bane.
+  const kapasitet = (d: string, t: number) => (belegg && na ? slot(d, t, belegg, na).ledigeHalvdeler : 0);
+  const antallLedige = (d: string) => TIMER.filter(t => kapasitet(d, t) > 0).length;
 
-  // Faste tider: for hver ukedag og time, hvilke av de gjenværende ukene som er ledige.
+  // Faste tider: for hver ukedag og time, hvilke gjenværende uker som har hel/halv bane ledig.
   const faste = useMemo(() => {
-    const ut = new Map<string, { ledige: string[]; uker: number }>();
+    const ut = new Map<string, { hel: string[]; halv: string[]; uker: number }>();
     if (!belegg || !na) return ut;
     for (let d = 1; d <= 7; d++) {
       const dagens = ALLE_DATOER.filter(x => ukedag(x) === d);
       for (const t of TIMER) {
         const kommende = dagens.filter(x => slot(x, t, belegg, na).tilstand !== 'passert');
-        const ledige = kommende.filter(x => slot(x, t, belegg, na).ledigeHalvdeler >= trengs);
-        if (ledige.length >= 2) ut.set(`${d}|${t}`, { ledige, uker: kommende.length });
+        const halv = kommende.filter(x => slot(x, t, belegg, na).ledigeHalvdeler >= 1);
+        const hel = kommende.filter(x => slot(x, t, belegg, na).ledigeHalvdeler === 2);
+        if (halv.length >= 2) ut.set(`${d}|${t}`, { hel, halv, uker: kommende.length });
       }
     }
     return ut;
-  }, [belegg, na, trengs]);
+  }, [belegg, na]);
 
   const sum = valgt.reduce((s, v) => s + prisFor(v.bane, v.dato), 0);
   const valgtPaa = (d: string, t: number) => valgt.find(v => v.dato === d && v.time === t);
 
-  function velg(d: string, t: number) {
+  // Samme knapp igjen fjerner timen, den andre banestørrelsen bytter.
+  function velg(d: string, t: number, bane: Bane) {
     setValgt(prev => {
       const finnes = prev.find(v => v.dato === d && v.time === t);
-      return finnes ? prev.filter(v => v !== finnes) : sorter([...prev, { dato: d, time: t, bane }]);
+      const uten = prev.filter(v => v !== finnes);
+      return finnes?.bane === bane ? uten : sorter([...uten, { dato: d, time: t, bane }]);
     });
   }
 
-  function velgFast(ds: string[], t: number) {
+  function velgFast(ds: string[], t: number, bane: Bane) {
     setValgt(prev => {
-      const alle = ds.every(d => prev.some(v => v.dato === d && v.time === t));
-      const uten = prev.filter(v => !(v.time === t && ds.includes(v.dato)));
+      const alle = ds.every(d => prev.some(v => v.dato === d && v.time === t && v.bane === bane));
+      const uten = prev.filter(v => !(v.time === t && ukedag(v.dato) === ukedag(ds[0])));
       return alle ? uten : sorter([...uten, ...ds.map(d => ({ dato: d, time: t, bane }))]);
     });
   }
@@ -195,35 +197,24 @@ export function BookingClient() {
   }
 
   const grunn = (d: string) => (t: number) => {
-    if (!belegg || !na) return 'Opptatt';
+    if (!belegg || !na) return '';
     const s = slot(d, t, belegg, na);
-    if (s.tilstand === 'passert') return 'Passert';
-    if (s.tilstand === 'stengt') return `Stengt${s.tekst ? ` · ${s.tekst}` : ''}`;
-    if (s.tilstand === 'halv') return 'Kun halv bane ledig';
-    return 'Opptatt';
+    return s.tilstand === 'stengt' ? s.tekst ?? 'Stengt' : '';
   };
 
+  const fastDato = ALLE_DATOER.find(x => ukedag(x) === fastDag)!;
   const rader = visning === 'enkelt'
-    ? byggRader(t => ledig(dag, t) || !!valgtPaa(dag, t), grunn(dag))
-    : byggRader(t => faste.has(`${fastDag}|${t}`), () => 'Ikke ledig flere uker');
+    ? byggRader(t => kapasitet(dag, t) > 0 || !!valgtPaa(dag, t), grunn(dag))
+    : byggRader(t => faste.has(`${fastDag}|${t}`), () => '');
 
   return (
     <Ramme>
       {demo && <p className="melding">Demo: bestillinger lagres ikke permanent.</p>}
       {lastFeil && <p className="melding feil">{lastFeil} <button className="lenke" onClick={last}>Prøv igjen</button></p>}
 
-      <div className="kontroller">
-        <div className="visning" role="tablist">
-          <button role="tab" aria-selected={visning === 'enkelt'} className={visning === 'enkelt' ? 'aktiv' : ''} onClick={() => setVisning('enkelt')}>Kalender</button>
-          <button role="tab" aria-selected={visning === 'fast'} className={visning === 'fast' ? 'aktiv' : ''} onClick={() => setVisning('fast')}>Fast tid hver uke</button>
-        </div>
-        <div className="segment" role="group" aria-label="Banestørrelse">
-          {(['hel', 'halv'] as Bane[]).map(b => (
-            <button key={b} aria-pressed={bane === b} className={bane === b ? 'pa' : ''} onClick={() => setBane(b)}>
-              {b === 'hel' ? 'Hel bane' : 'Halv bane'}
-            </button>
-          ))}
-        </div>
+      <div className="visning" role="tablist">
+        <button role="tab" aria-selected={visning === 'enkelt'} className={visning === 'enkelt' ? 'aktiv' : ''} onClick={() => setVisning('enkelt')}>Enkelttimer</button>
+        <button role="tab" aria-selected={visning === 'fast'} className={visning === 'fast' ? 'aktiv' : ''} onClick={() => setVisning('fast')}>Fast hver uke</button>
       </div>
 
       {!belegg ? (
@@ -244,10 +235,9 @@ export function BookingClient() {
                   const n = ute ? 0 : antallLedige(d);
                   return (
                     <button key={d} className={`dagbrikke ${d === dag ? 'valgt' : ''} ${erHelg(d) ? 'helg' : ''}`}
-                      disabled={ute} onClick={() => setDag(d)}>
+                      disabled={ute || n === 0} onClick={() => setDag(d)}>
                       <span className="dagbrikke-tekst">{b.tekst}</span>
                       <span className="dagbrikke-dato">{b.dato}</span>
-                      <span className={`dagbrikke-ledig ${n === 0 ? 'ingen' : ''}`}>{ute ? '' : n === 0 ? 'fullt' : `${n} ledig`}</span>
                       {valgt.some(v => v.dato === d) && <span className="prikk" />}
                     </button>
                   );
@@ -257,21 +247,20 @@ export function BookingClient() {
             </>
           ) : (
             <>
-              <p className="hjelp">Velg ukedag og trykk på en tid. Du får den alle ukene den er ledig resten av sesongen.</p>
               <div className="dagstripe">
                 {DAGER.map((n, i) => {
                   const d = i + 1;
-                  const antall = TIMER.filter(t => faste.has(`${d}|${t}`)).length;
+                  const har = TIMER.some(t => faste.has(`${d}|${t}`));
                   return (
-                    <button key={n} className={`dagbrikke ${d === fastDag ? 'valgt' : ''} ${d >= 6 ? 'helg' : ''}`} onClick={() => setFastDag(d)}>
-                      <span className="dagbrikke-tekst">{n}</span>
-                      <span className={`dagbrikke-ledig ${antall === 0 ? 'ingen' : ''}`}>{antall === 0 ? 'fullt' : `${antall} tider`}</span>
+                    <button key={n} className={`dagbrikke ${d === fastDag ? 'valgt' : ''} ${d >= 6 ? 'helg' : ''}`}
+                      disabled={!har} onClick={() => setFastDag(d)}>
+                      <span className="dagbrikke-dato">{n}</span>
                       {valgt.some(v => ukedag(v.dato) === d) && <span className="prikk" />}
                     </button>
                   );
                 })}
               </div>
-              <h2 className="valgt-dag">{stor(dagnavn(ALLE_DATOER.find(x => ukedag(x) === fastDag)!))}er</h2>
+              <h2 className="valgt-dag">{stor(dagnavn(fastDato))}er resten av sesongen</h2>
             </>
           )}
 
@@ -281,32 +270,26 @@ export function BookingClient() {
                 return (
                   <div key={`o${r.fra}`} className="tl-opptatt">
                     <span className="tl-tid">{kl(r.fra, r.til)}</span>
-                    <span>{r.tekst}</span>
+                    {r.tekst && <span>{r.tekst}</span>}
                   </div>
                 );
               }
               const t = r.time;
               if (visning === 'fast') {
                 const f = faste.get(`${fastDag}|${t}`)!;
-                const pa = f.ledige.every(x => valgtPaa(x, t));
+                const valgtBane = (['hel', 'halv'] as Bane[]).find(b => {
+                  const ds = b === 'hel' ? f.hel : f.halv;
+                  return ds.length > 0 && ds.every(x => valgtPaa(x, t)?.bane === b);
+                });
                 return (
-                  <button key={t} className={`tl-ledig ${pa ? 'valgt' : ''}`} aria-pressed={pa} onClick={() => velgFast(f.ledige, t)}>
-                    <span className="tl-tid">{kl(t)}</span>
-                    <span className="tl-tekst">{pa ? `Valgt, ${f.ledige.length} uker` : `Ledig ${f.ledige.length} av ${f.uker} uker`}</span>
-                    <span className="tl-pluss">{pa ? <Check size={18} /> : '+'}</span>
-                  </button>
+                  <Tidsrad key={t} tid={kl(t)} under={`${f.halv.length} av ${f.uker} uker`} dato={fastDato}
+                    kanHel={f.hel.length >= 2} valgt={valgtBane}
+                    onVelg={b => velgFast(b === 'hel' ? f.hel : f.halv, t, b)} />
                 );
               }
-              const v = valgtPaa(dag, t);
               return (
-                <button key={t} className={`tl-ledig ${v ? 'valgt' : ''}`} aria-pressed={!!v} onClick={() => velg(dag, t)}>
-                  <span className="tl-tid">{kl(t)}</span>
-                  <span className="tl-tekst">
-                    {v ? `Valgt, ${v.bane === 'hel' ? 'hel' : 'halv'} bane` : 'Ledig'}
-                  </span>
-                  <span className="tl-pris">{kr(prisFor(v?.bane ?? bane, dag))}</span>
-                  <span className="tl-pluss">{v ? <Check size={18} /> : '+'}</span>
-                </button>
+                <Tidsrad key={t} tid={kl(t)} dato={dag} kanHel={kapasitet(dag, t) === 2 || valgtPaa(dag, t)?.bane === 'hel'}
+                  valgt={valgtPaa(dag, t)?.bane} onVelg={b => velg(dag, t, b)} />
               );
             })}
           </div>
@@ -329,6 +312,31 @@ export function BookingClient() {
   );
 }
 
+// Én ledig time: tid til venstre, valg av banestørrelse med pris til høyre.
+function Tidsrad({ tid, under, dato, kanHel, valgt, onVelg }: {
+  tid: string;
+  under?: string;
+  dato: string;
+  kanHel: boolean;
+  valgt?: Bane;
+  onVelg: (b: Bane) => void;
+}) {
+  return (
+    <div className={`tl-ledig ${valgt ? 'valgt' : ''}`}>
+      <span className="tl-tid">{tid}{under && <small>{under}</small>}</span>
+      <span className="tl-valg">
+        {(['hel', 'halv'] as Bane[]).map(b => (b === 'hel' && !kanHel) ? null : (
+          <button key={b} aria-pressed={valgt === b} className={valgt === b ? 'pa' : ''} onClick={() => onVelg(b)}>
+            {valgt === b && <Check size={15} />}
+            <span>{b === 'hel' ? 'Hel' : 'Halv'}</span>
+            <small>{kr(prisFor(b, dato))}</small>
+          </button>
+        ))}
+      </span>
+    </div>
+  );
+}
+
 function Ramme({ children }: { children: React.ReactNode }) {
   return (
     <>
@@ -339,10 +347,8 @@ function Ramme({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <main className="innhold">
-        <h1>Book tid på {ARENA.navn}</h1>
-        <p className="ingress">
-          Vinteråpen arena {dagOgManed(SESONG.fra)} – {dagOgManed(SESONG.til)}. Hel bane {kr(PRIS.ukedag.hel)} per time ({kr(PRIS.helg.hel)} i helgene), halv bane {kr(PRIS.ukedag.halv)} ({kr(PRIS.helg.halv)}).
-        </p>
+        <h1>{ARENA.navn}</h1>
+        <p className="ingress">Vinteråpen {dagOgManed(SESONG.fra, true)} – {dagOgManed(SESONG.til, true)}</p>
         {children}
       </main>
       <footer className="fot innhold">

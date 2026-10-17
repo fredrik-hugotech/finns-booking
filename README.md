@@ -9,15 +9,16 @@ alt som er ledig kan bookes som halv eller hel bane, én time om gangen fra
 
 Kalenderen følger samme mønster som mer.golf:
 
-- **Ukenavigasjon** med piler (Denne uken, Neste uke, 16.–22. nov).
-- **Dagbrikker** for uka, med antall ledige timer per dag og en prikk på
-  dager der du har valgt timer.
-- **Tidslinje** for valgt dag: ledige timer med «+», opptatte timer slått
-  sammen til én dempet blokk. Trykk for å velge, trykk igjen for å fjerne.
-- **Fast tid hver uke**: brikker for mandag–søndag og samme tidslinje,
-  der hver tid viser hvor mange uker den er ledig. Ett trykk tar alle.
-- Hel eller halv bane velges øverst. Alt du velger samles i bunnlinjen,
-  og oppsummeringen slår sammen sammenhengende og ukentlige timer.
+- **Ukenavigasjon** med piler og **dagbrikker** for uka. Dager uten ledig tid
+  er grået ut, og en prikk viser dager der du har valgt timer.
+- **Tidslinje** for valgt dag. Hver ledig time har to knapper: «Hel» og
+  «Halv» med pris. Trykk for å velge, trykk igjen for å fjerne, eller trykk
+  den andre for å bytte. Er bare halv bane ledig, vises bare den knappen.
+  Opptatte timer står i grått.
+- **Fast hver uke**: brikker for mandag–søndag og samme rader, med hvor mange
+  uker tiden er ledig. Ett trykk tar alle de ukene.
+- Alt du velger samles i bunnlinjen. Oppsummeringen slår sammen
+  sammenhengende og ukentlige timer.
 - Bestillingen sendes som en forespørsel med referanse (SNAK-XXXXX) og blir
   bindende når betalingen er mottatt med Vipps.
 
