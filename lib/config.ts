@@ -18,10 +18,12 @@ export const SESONG = {
 export const FORSTE_TIME = 8;
 export const SISTE_TIME = 22;
 
-// Pris per time. Helg = lørdag og søndag.
-export const PRIS = {
-  ukedag: { hel: 2000, halv: 1500 },
-  helg: { hel: 2100, halv: 1600 },
+// Pris per time. Helg = lørdag og søndag. Prisene settes i admin (lagres i
+// databasen); dette er bare utgangspunktet og det som brukes i demo-modus.
+export type Priser = { ukedag: { hel: number; halv: number }; helg: { hel: number; halv: number } };
+export const STANDARD_PRIS: Priser = {
+  ukedag: { hel: 1990, halv: 1490 },
+  helg: { hel: 1990, halv: 1490 },
 };
 
 // Dager arenaen er stengt for booking.

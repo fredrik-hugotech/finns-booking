@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { hentBestillinger, hentSperringer, lagreBestillinger, nyRef, OpptattFeil } from '@/lib/lager';
+import { hentBestillinger, hentPriser, hentSperringer, lagreBestillinger, nyRef, OpptattFeil } from '@/lib/lager';
 import { byggBelegg, halvdeler, nokkel, prisFor, slot, type Bane } from '@/lib/tilgjengelighet';
 import { SESONG } from '@/lib/config';
 import { erGyldigDato, langDato, naIOslo, tidsrom } from '@/lib/dato';
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const [bestillinger, sperringer] = await Promise.all([hentBestillinger(SESONG.fra), hentSperringer()]);
+    const [bestillinger, sperringer, priser] = await Promise.all([hentBestillinger(SESONG.fra), hentSperringer(), hentPriser()]);
     const belegg = byggBelegg(bestillinger, sperringer);
     const na = naIOslo();
 
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
     const ref = nyRef();
     const serie = linjer.length > 1 && body.serie === true ? ref : null;
     const lagret = await lagreBestillinger(linjer.map(l => ({
-      ref, dato: l.dato, time: l.time, bane: l.bane, pris: prisFor(l.bane, l.dato),
+      ref, dato: l.dato, time: l.time, bane: l.bane, pris: prisFor(l.bane, l.dato, priser),
       navn, telefon, epost, klubb, kommentar, serie,
     })));
     const sum = lagret.reduce((s, b) => s + b.pris, 0);

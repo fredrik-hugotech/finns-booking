@@ -2,21 +2,23 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
-  Check, X, LogOut, Trash2, Loader2, Lock, Inbox, CalendarDays, Ban, List, Users, Phone, Mail, MessageSquare, Pencil,
+  Check, X, LogOut, Trash2, Loader2, Lock, Inbox, CalendarDays, Ban, List, Users, Phone, Mail, MessageSquare, Pencil, Tag,
 } from 'lucide-react';
-import { SESONG } from '@/lib/config';
+import { SESONG, STANDARD_PRIS, type Priser } from '@/lib/config';
 import {
-  TIMER, byggBelegg, fastTidFor, prisFor, slot, type Bane, type Bestilling, type Sperring, type Status,
+  TIMER, byggBelegg, fastTidFor, slot, type Bane, type Bestilling, type Sperring, type Status,
 } from '@/lib/tilgjengelighet';
+import { PrisKontekst, usePris } from './Priser';
 import { dagOgManed, datoer, kr, langDato, leggTilDager, mandagI, naIOslo, tidsrom, ukedag } from '@/lib/dato';
 
-type Fane = 'kalender' | 'foresporsler' | 'bookinger' | 'kunder' | 'sperringer';
+type Fane = 'kalender' | 'foresporsler' | 'bookinger' | 'kunder' | 'sperringer' | 'priser';
 const FANER: { key: Fane; navn: string; ikon: typeof Inbox }[] = [
   { key: 'kalender', navn: 'Kalender', ikon: CalendarDays },
   { key: 'foresporsler', navn: 'Forespørsler', ikon: Inbox },
   { key: 'bookinger', navn: 'Bookinger', ikon: List },
   { key: 'kunder', navn: 'Kunder', ikon: Users },
   { key: 'sperringer', navn: 'Sperringer', ikon: Ban },
+  { key: 'priser', navn: 'Priser', ikon: Tag },
 ];
 const DAGER = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
 const MANEDER = ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'desember'];
@@ -59,6 +61,7 @@ function Login({ demo, onInne }: { demo: boolean; onInne: () => void }) {
 function Panel({ onUt }: { onUt: () => void }) {
   const [bestillinger, setBestillinger] = useState<Bestilling[] | null>(null);
   const [sperringer, setSperringer] = useState<Sperring[]>([]);
+  const [priser, setPriser] = useState<Priser>(STANDARD_PRIS);
   const [fane, setFane] = useState<Fane>('kalender');
   const [melding, setMelding] = useState<{ tekst: string; feil?: boolean } | null>(null);
   const [dag, setDag] = useState(() => {
@@ -67,10 +70,11 @@ function Panel({ onUt }: { onUt: () => void }) {
   });
 
   async function last() {
-    const [a, b] = await Promise.all([fetch('/api/admin/bestillinger'), fetch('/api/admin/sperringer')]);
+    const [a, b, c] = await Promise.all([fetch('/api/admin/bestillinger'), fetch('/api/admin/sperringer'), fetch('/api/admin/priser')]);
     if (a.status === 401) return onUt();
     setBestillinger((await a.json()).bestillinger);
     setSperringer((await b.json()).sperringer);
+    if (c.ok) setPriser((await c.json()).priser);
   }
   useEffect(() => { last(); }, []);
 
@@ -104,6 +108,7 @@ function Panel({ onUt }: { onUt: () => void }) {
   const aktiv = FANER.find(f => f.key === fane)!;
 
   return (
+    <PrisKontekst.Provider value={priser}>
     <div className="admin adm">
       <aside className="adm-meny">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -140,10 +145,12 @@ function Panel({ onUt }: { onUt: () => void }) {
             {fane === 'bookinger' && <Bookinger bestillinger={aktive} alle={bestillinger} sperringer={sperringer} api={api} onDag={visDag} />}
             {fane === 'kunder' && <Kunder bestillinger={aktive} alle={bestillinger} api={api} onDag={visDag} />}
             {fane === 'sperringer' && <Sperringer sperringer={sperringer} api={api} />}
+            {fane === 'priser' && <Prisvalg priser={priser} api={api} />}
           </>
         )}
       </main>
     </div>
+    </PrisKontekst.Provider>
   );
 }
 
@@ -204,6 +211,7 @@ function Bookingrad({ b, alle, api, visDato }: { b: Bestilling; alle: Bestilling
 }
 
 function Redigering({ b, alle, api, onFerdig }: { b: Bestilling; alle: Bestilling[]; api: Api; onFerdig: () => void }) {
+  const prisFor = usePris();
   const andre = alle.filter(x => x.ref === b.ref && x.status !== 'avlyst');
   const [f, setF] = useState({
     dato: b.dato, time: b.time, bane: b.bane as Bane,
@@ -259,6 +267,7 @@ function Redigering({ b, alle, api, onFerdig }: { b: Bestilling; alle: Bestillin
 }
 
 function NyBooking({ dato, time, kanHel, api, onFerdig }: { dato: string; time: number; kanHel: boolean; api: Api; onFerdig: () => void }) {
+  const prisFor = usePris();
   const [f, setF] = useState({ navn: '', telefon: '', epost: '', klubb: '', bane: (kanHel ? 'hel' : 'halv') as Bane });
   async function lagre(e: React.FormEvent) {
     e.preventDefault();
@@ -518,5 +527,35 @@ function Sperringer({ sperringer, api }: { sperringer: Sperring[]; api: Api }) {
         </section>
       )}
     </>
+  );
+}
+
+function Prisvalg({ priser, api }: { priser: Priser; api: Api }) {
+  const [p, setP] = useState(priser);
+  useEffect(() => setP(priser), [priser]);
+  const endret = JSON.stringify(p) !== JSON.stringify(priser);
+  const felt = (dag: 'ukedag' | 'helg', bane: Bane) => (
+    <label>
+      {bane === 'hel' ? 'Hel bane' : 'Halv bane'}
+      <span className="kr-felt">
+        <input type="number" inputMode="numeric" min={0} step={10} required value={p[dag][bane]}
+          onChange={e => setP({ ...p, [dag]: { ...p[dag], [bane]: Math.round(Number(e.target.value)) } })} />
+        <span>kr</span>
+      </span>
+    </label>
+  );
+  async function lagre(e: React.FormEvent) {
+    e.preventDefault();
+    await api('PUT', '/api/admin/priser', p, 'Prisene er lagret.');
+  }
+  return (
+    <form className="kort skjema" onSubmit={lagre}>
+      <p className="dempet">Per time. Gjelder nye bookinger – det som alt er booket, beholder prisen sin.</p>
+      <h3>Mandag–fredag</h3>
+      <div className="to">{felt('ukedag', 'hel')}{felt('ukedag', 'halv')}</div>
+      <h3>Lørdag og søndag</h3>
+      <div className="to">{felt('helg', 'hel')}{felt('helg', 'halv')}</div>
+      <button className="knapp" disabled={!endret}>Lagre priser</button>
+    </form>
   );
 }

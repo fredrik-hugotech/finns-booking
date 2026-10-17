@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { erAdmin } from '@/lib/admin';
 import {
-  hentBestillinger, hentSperringer, lagreBestillinger, nyRef, oppdaterBestillinger, OpptattFeil, settStatus, type Endringer,
+  hentBestillinger, hentPriser, hentSperringer, lagreBestillinger, nyRef, oppdaterBestillinger, OpptattFeil, settStatus, type Endringer,
 } from '@/lib/lager';
 import { byggBelegg, halvdeler, prisFor, slot, type Bane, type Status } from '@/lib/tilgjengelighet';
 import { erGyldigDato, naIOslo } from '@/lib/dato';
@@ -63,7 +63,7 @@ export async function PATCH(req: Request) {
       if (!(await ledig(dato, time, bane, [naa.id]))) {
         return NextResponse.json({ feil: 'Den tiden er ikke ledig.' }, { status: 409 });
       }
-      Object.assign(ut, { dato, time, bane, pris: prisFor(bane, dato) });
+      Object.assign(ut, { dato, time, bane, pris: prisFor(bane, dato, await hentPriser()) });
     }
 
     await oppdaterBestillinger(ider, ut);
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
   }
   try {
     const lagret = await lagreBestillinger([{
-      ref: nyRef(), dato: b.dato, time: b.time, bane, pris: prisFor(bane, b.dato), serie: null,
+      ref: nyRef(), dato: b.dato, time: b.time, bane, pris: prisFor(bane, b.dato, await hentPriser()), serie: null,
       navn, telefon: tekst(b.telefon, 30) ?? '', epost: tekst(b.epost, 160) ?? '',
       klubb: tekst(b.klubb, 120) || null, kommentar: tekst(b.kommentar, 1000) || null,
     }]);

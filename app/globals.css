@@ -306,3 +306,9 @@ h1 { font-size: 1.5rem; color: var(--gronn); margin-bottom: 2px; }
 .status.bekreftet { background: var(--gronn-lys); color: var(--gronn); }
 .status.avlyst { background: var(--flate); color: var(--dempet); }
 .handlinger { display: flex; gap: 8px; margin-top: 14px; }
+
+/* Priser i admin */
+.skjema h3 { font-size: 14px; margin: 6px 0 -4px; }
+.kr-felt { display: flex; align-items: center; gap: 8px; }
+.kr-felt input { flex: 1; min-width: 0; font-variant-numeric: tabular-nums; }
+.kr-felt span { color: var(--dempet); font-size: 14px; }

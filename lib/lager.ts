@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID, randomInt } from 'crypto';
 import type { Bestilling, Sperring, Status } from './tilgjengelighet';
+import { STANDARD_PRIS, type Priser } from './config';
 
 // Lagring: Supabase når miljøvariablene er satt, ellers minne (demo-modus,
 // tømmes ved omstart). Begge gir samme grensesnitt.
@@ -33,6 +34,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T
 export const erDemo = () => supabase() === null;
 
 const minne = globalThis as unknown as { __snak?: { bestillinger: Bestilling[]; sperringer: Sperring[] } };
+const demoPriser = globalThis as unknown as { __snakPriser?: Priser };
 const demo = () => (minne.__snak ??= { bestillinger: [], sperringer: [] });
 
 export function nyRef(): string {
@@ -98,4 +100,17 @@ export async function oppdaterBestillinger(ider: string[], endringer: Endringer)
     return rader;
   }
   return rpc<Bestilling[]>('snak_oppdater_bestillinger', { p_ider: ider, p_endringer: endringer });
+}
+
+export async function hentPriser(): Promise<Priser> {
+  if (erDemo()) return (demoPriser.__snakPriser ??= STANDARD_PRIS);
+  return (await rpc<Priser | null>('snak_hent_priser')) ?? STANDARD_PRIS;
+}
+
+export async function lagrePriser(priser: Priser): Promise<void> {
+  if (erDemo()) {
+    demoPriser.__snakPriser = priser;
+    return;
+  }
+  await rpc('snak_lagre_priser', { p_priser: priser });
 }

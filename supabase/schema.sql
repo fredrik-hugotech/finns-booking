@@ -151,3 +151,28 @@ begin
     returning *;
 end
 $fn$;
+
+-- Priser per time, endres fra admin. Ett jsonb-dokument:
+-- { "ukedag": { "hel": 1990, "halv": 1490 }, "helg": { "hel": 1990, "halv": 1490 } }
+create table if not exists snak_innstillinger (nokkel text primary key, verdi jsonb not null);
+alter table snak_innstillinger enable row level security;
+insert into snak_innstillinger (nokkel, verdi)
+  values ('priser', '{"ukedag":{"hel":1990,"halv":1490},"helg":{"hel":1990,"halv":1490}}')
+  on conflict (nokkel) do nothing;
+
+create or replace function snak_hent_priser(p_nokkel text) returns jsonb
+language plpgsql security definer set search_path = public stable as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  return (select verdi from snak_innstillinger where nokkel = 'priser');
+end
+$fn$;
+
+create or replace function snak_lagre_priser(p_nokkel text, p_priser jsonb) returns void
+language plpgsql security definer set search_path = public as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  insert into snak_innstillinger (nokkel, verdi) values ('priser', p_priser)
+    on conflict (nokkel) do update set verdi = excluded.verdi;
+end
+$fn$;

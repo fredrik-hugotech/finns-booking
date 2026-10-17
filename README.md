@@ -38,12 +38,15 @@ Bygget som admin i mer.golf: sidemeny på PC, fanelinje nederst på mobil.
 - **Bookinger**: kommende bookinger dag for dag, med nøkkeltall.
 - **Kunder**: alle som har booket, med antall timer, sum, neste booking og søk.
 - **Sperringer**: sperr tid for kampdager, vedlikehold og arrangementer.
+- **Priser**: pris per time for hel og halv bane, ukedag og helg. Gjelder nye
+  bookinger; timer som allerede er booket beholder prisen sin.
 
 ## Endre sesong, priser og faste tider
 
 | Hva | Fil |
 |---|---|
-| Sesongstart og -slutt, åpningstid, priser, stengte dager | `lib/config.ts` |
+| Priser | Admin → Priser (standard 1990/1490 i `lib/config.ts`) |
+| Sesongstart og -slutt, åpningstid, stengte dager | `lib/config.ts` |
 | Klubbenes faste treningstider (fra regnearket «Treningstider SNAK 2026/2027») | `lib/faste-tider.ts` |
 
 ## Kjøre lokalt

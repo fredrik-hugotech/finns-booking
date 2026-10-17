@@ -2,14 +2,15 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
-import { ARENA, SESONG } from '@/lib/config';
+import { ARENA, SESONG, STANDARD_PRIS, type Priser } from '@/lib/config';
 import {
-  TIMER, erHelg, halvdeler, nokkel, prisFor, slot, type Bane, type Belegg,
+  TIMER, erHelg, halvdeler, nokkel, slot, type Bane, type Belegg,
 } from '@/lib/tilgjengelighet';
 import {
   dagOgManed, dagnavn, datoer, kr, langDato, leggTilDager, mandagI, ukedag, ukenummer,
 } from '@/lib/dato';
 import { Retningslinjer } from './Retningslinjer';
+import { PrisKontekst, usePris } from './Priser';
 
 type Valgt = { dato: string; time: number; bane: Bane };
 type Visning = 'enkelt' | 'fast';
@@ -92,6 +93,16 @@ function byggRader(erLedig: (t: number) => boolean, grunn: (t: number) => string
 }
 
 export function BookingClient() {
+  const [priser, setPriser] = useState(STANDARD_PRIS);
+  return (
+    <PrisKontekst.Provider value={priser}>
+      <Booking onPriser={setPriser} />
+    </PrisKontekst.Provider>
+  );
+}
+
+function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
+  const prisFor = usePris();
   const [belegg, setBelegg] = useState<Belegg | null>(null);
   const [na, setNa] = useState<Na | null>(null);
   const [demo, setDemo] = useState(false);
@@ -111,6 +122,7 @@ export function BookingClient() {
       const j = await r.json();
       if (!r.ok) throw new Error(j.feil);
       setBelegg(j.belegg);
+      if (j.priser) onPriser(j.priser);
       setNa(j.na);
       setDemo(j.demo);
       setLastFeil(null);
@@ -354,6 +366,7 @@ function Tidsrad({ tid, under, dato, kanHel, valgt, onVelg }: {
   valgt?: Bane;
   onVelg: (b: Bane) => void;
 }) {
+  const prisFor = usePris();
   return (
     <div className={`tl-ledig ${valgt ? 'valgt' : ''}`}>
       <span className="tl-tid">{tid}{under && <small>{under}</small>}</span>
@@ -399,6 +412,7 @@ function Skjema({ valgt, sum, onTilbake, onFjern, onFerdig, onOpptatt }: {
   onFerdig: (k: Kvittering) => void;
   onOpptatt: () => void;
 }) {
+  const prisFor = usePris();
   const [f, setF] = useState({ navn: '', telefon: '', epost: '', klubb: '', kommentar: '' });
   const [godtatt, setGodtatt] = useState(false);
   const [sender, setSender] = useState(false);

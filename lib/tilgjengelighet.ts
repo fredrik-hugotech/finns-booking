@@ -1,7 +1,7 @@
 // Felles regler for hva som er ledig. Brukes både i nettleseren (visning)
 // og på serveren (sjekk før en bestilling lagres), så de aldri kan spriker.
 
-import { FORSTE_TIME, SISTE_TIME, SESONG, STENGTE_DAGER, PRIS } from './config';
+import { FORSTE_TIME, SISTE_TIME, SESONG, STENGTE_DAGER, type Priser } from './config';
 import { FASTE_TIDER } from './faste-tider';
 import { minutter, ukedag } from './dato';
 
@@ -52,7 +52,7 @@ export const TIMER: number[] = Array.from({ length: SISTE_TIME - FORSTE_TIME + 1
 
 export const halvdeler = (bane: Bane) => (bane === 'hel' ? 2 : 1);
 export const erHelg = (dato: string) => ukedag(dato) >= 6;
-export const prisFor = (bane: Bane, dato: string) => PRIS[erHelg(dato) ? 'helg' : 'ukedag'][bane];
+export const prisFor = (bane: Bane, dato: string, priser: Priser) => priser[erHelg(dato) ? 'helg' : 'ukedag'][bane];
 export const nokkel = (dato: string, time: number) => `${dato}|${time}`;
 
 export function fastTidFor(dato: string, time: number) {
