@@ -436,3 +436,22 @@ h1 { font-size: 1.5rem; color: var(--gronn); margin-bottom: 2px; }
 .innsyn-kontakt { display: flex; align-items: center; gap: 10px; width: 100%; padding-left: 116px; font-size: 0.88rem; }
 .innsyn-kontakt .kontaktknapper { margin-left: auto; }
 @media (max-width: 520px) { .innsyn-kontakt { padding-left: 0; } }
+
+/* Logg */
+.logg-filter { display: flex; gap: 8px; }
+.logg-filter .adm-sok { flex: 1; }
+.logg-filter select { margin-bottom: 12px; padding: 0 10px; border: 1px solid var(--linje); border-radius: 8px; background: #fff; max-width: 40%; }
+.admin .kort.logg-dag { margin-bottom: 12px; padding-bottom: 6px; }
+.logg-dag h2 { margin: 0 0 6px; font-size: 0.95rem; }
+.logg { list-style: none; margin: 0; padding: 0; }
+.logg li { display: grid; grid-template-columns: 52px 1fr auto; gap: 4px 12px; padding: 8px 0; border-top: 1px solid var(--linje); font-size: 0.9rem; align-items: baseline; }
+.logg li:first-child { border-top: 0; }
+.logg-tid { color: var(--dempet); font-variant-numeric: tabular-nums; }
+.logg-hva { display: grid; gap: 2px; min-width: 0; }
+.logg-hva span { color: var(--dempet); overflow-wrap: anywhere; }
+.logg-hvem { font-weight: 600; color: var(--gronn-mork); text-align: right; }
+.logg li.utenfra .logg-hvem { color: var(--dempet); font-weight: 400; }
+@media (max-width: 520px) {
+  .logg li { grid-template-columns: 44px 1fr; }
+  .logg-hvem { grid-column: 2; text-align: left; font-size: 0.82rem; }
+}

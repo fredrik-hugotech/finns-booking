@@ -303,3 +303,32 @@ begin
   update snak_brukere set sist_inne = now() where id = p_id;
 end
 $fn$;
+
+-- Logg over alt som skjer i backoffice: hvem, hva og når. Kan bare skrives
+-- til og leses, aldri endres eller slettes via API-et.
+create table if not exists snak_logg (
+  id bigserial primary key,
+  tid timestamptz not null default now(),
+  bruker_id uuid,
+  hvem text not null,
+  handling text not null,
+  detaljer text
+);
+alter table snak_logg enable row level security;
+create index if not exists snak_logg_tid on snak_logg (tid desc);
+
+create or replace function snak_skriv_logg(p_nokkel text, p_bruker uuid, p_hvem text, p_handling text, p_detaljer text) returns void
+language plpgsql security definer set search_path = public as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  insert into snak_logg (bruker_id, hvem, handling, detaljer) values (p_bruker, p_hvem, p_handling, p_detaljer);
+end
+$fn$;
+
+create or replace function snak_hent_logg(p_nokkel text, p_antall int default 500) returns setof snak_logg
+language plpgsql security definer set search_path = public stable as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  return query select * from snak_logg order by tid desc limit least(coalesce(p_antall, 500), 5000);
+end
+$fn$;

@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
-  Check, X, LogOut, Trash2, Loader2, Inbox, CalendarDays, Ban, List, Users, Phone, Mail, MessageSquare, Pencil, Settings, Shield,
+  Check, X, LogOut, Trash2, Loader2, Inbox, CalendarDays, Ban, List, Users, Phone, Mail, MessageSquare, Pencil, Settings, Shield, History,
 } from 'lucide-react';
 import { SESONG, STANDARD_PRIS, STENGTE_DAGER, type Priser } from '@/lib/config';
 import {
@@ -10,11 +10,11 @@ import {
 } from '@/lib/tilgjengelighet';
 import { PrisKontekst, usePris } from './Priser';
 import { Klubber, Klubbrad, UkeOversikt, klubbFarge } from './AdminKlubber';
-import { Brukere, Innsyn, Login, MittPassord, loggUt } from './Backoffice';
+import { Brukere, Innsyn, Logg, Login, MittPassord, loggUt } from './Backoffice';
 import type { Bruker } from '@/lib/lager';
 import { dagOgManed, datoer, kr, langDato, leggTilDager, mandagI, minutter, naIOslo, tidsrom, ukedag, ukenummer } from '@/lib/dato';
 
-type Fane = 'kalender' | 'foresporsler' | 'bookinger' | 'klubber' | 'kunder' | 'sperringer' | 'innstillinger';
+type Fane = 'kalender' | 'foresporsler' | 'bookinger' | 'klubber' | 'kunder' | 'sperringer' | 'logg' | 'innstillinger';
 const FANER: { key: Fane; navn: string; ikon: typeof Inbox }[] = [
   { key: 'kalender', navn: 'Kalender', ikon: CalendarDays },
   { key: 'foresporsler', navn: 'Forespørsler', ikon: Inbox },
@@ -22,6 +22,7 @@ const FANER: { key: Fane; navn: string; ikon: typeof Inbox }[] = [
   { key: 'klubber', navn: 'Klubber', ikon: Shield },
   { key: 'kunder', navn: 'Kunder', ikon: Users },
   { key: 'sperringer', navn: 'Sperringer', ikon: Ban },
+  { key: 'logg', navn: 'Logg', ikon: History },
   { key: 'innstillinger', navn: 'Innstillinger', ikon: Settings },
 ];
 const STATUSTEKST: Record<Status, string> = { forespurt: 'Venter', bekreftet: 'Bekreftet', avlyst: 'Fjernet' };
@@ -128,6 +129,7 @@ function Panel({ meg, onUt }: { meg: Bruker; onUt: () => void }) {
             {fane === 'klubber' && <Klubber klubbtider={klubbtider} api={api} />}
             {fane === 'kunder' && <Kunder bestillinger={aktive} alle={bestillinger} api={api} onDag={visDag} />}
             {fane === 'sperringer' && <Sperringer sperringer={sperringer} api={api} />}
+            {fane === 'logg' && <Logg />}
             {fane === 'innstillinger' && (
               <div className="innstillinger">
                 <Brukere meg={meg} api={api} />

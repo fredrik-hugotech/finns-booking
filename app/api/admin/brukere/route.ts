@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomInt } from 'crypto';
 import { hashPassord, innlogget } from '@/lib/tilgang';
-import { hentBruker, hentBrukere, lagreBruker, type Rolle } from '@/lib/lager';
+import { hentBruker, hentBrukere, lagreBruker, skrivLogg, type Rolle } from '@/lib/lager';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +45,7 @@ export async function POST(req: Request) {
     if (!navn || !epost || !rolle) return NextResponse.json({ feil: 'Fyll inn navn, e-post og rolle.' }, { status: 400 });
     const passord = nyttPassord();
     await lagreBruker({ navn, epost, rolle, passord_hash: hashPassord(passord) });
+    await skrivLogg(meg, 'La til bruker', `${navn} (${epost}) · ${rolle === 'admin' ? 'Admin' : 'Innsyn'}`);
     return NextResponse.json({ ok: true, passord });
   }
 
@@ -52,10 +53,19 @@ export async function POST(req: Request) {
   if (id === meg.id && (aktiv === false || rolle === 'innsyn')) {
     return NextResponse.json({ feil: 'Du kan ikke fjerne din egen admin-tilgang.' }, { status: 400 });
   }
+  const funnet = await hentBruker({ id });
+  const for_ = funnet && { ...funnet };
+  if (!for_) return NextResponse.json({ feil: 'Fant ikke brukeren.' }, { status: 404 });
   const passord = b.nyttPassord === true ? nyttPassord() : undefined;
   await lagreBruker({
     id, navn: navn || undefined, epost: epost || undefined, rolle, aktiv,
     passord_hash: passord ? hashPassord(passord) : undefined,
   });
+  const hvem = `${for_.navn} (${for_.epost})`;
+  if (passord) await skrivLogg(meg, 'Laget nytt passord', hvem);
+  if (rolle && rolle !== for_.rolle) await skrivLogg(meg, 'Endret tilgang', `${hvem} · ${rolle === 'admin' ? 'Admin' : 'Innsyn'}`);
+  if (aktiv === false && for_.aktiv) await skrivLogg(meg, 'Stengte tilgang', hvem);
+  if (aktiv === true && !for_.aktiv) await skrivLogg(meg, 'Åpnet tilgang igjen', hvem);
+  if ((navn && navn !== for_.navn) || (epost && epost !== for_.epost)) await skrivLogg(meg, 'Endret bruker', `${hvem} → ${navn || for_.navn} (${epost || for_.epost})`);
   return NextResponse.json({ ok: true, passord });
 }

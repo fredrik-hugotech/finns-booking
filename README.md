@@ -39,6 +39,12 @@ nytt passord, bytte tilgang og stenge brukere. Alle kan bytte sitt eget
 passord. En stengt bruker eller en bruker med nytt passord blir logget ut med
 en gang.
 
+**Logg** (bare admin) viser alt som skjer i backoffice, nyeste først, med
+hvem som gjorde det: innlogging (også mislykkede forsøk), bookinger som
+bekreftes, endres, legges inn eller fjernes, klubbtider, sperringer, priser
+og brukere. Nye forespørsler fra nettsiden kommer også med. Loggen kan søkes
+i og filtreres på person, og kan ikke endres eller slettes.
+
 Admin er bygget som admin i mer.golf: sidemeny på PC, fanelinje nederst på mobil.
 
 - **Kalender**: ukeoversikt som regnearket, der hver halvtime viser hvem som

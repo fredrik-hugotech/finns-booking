@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
-import { erAdmin } from '@/lib/tilgang';
+import { adminBruker, erAdmin } from '@/lib/tilgang';
 import {
-  hentBestillinger, hentKlubbtider, hentPriser, hentSperringer, lagreBestillinger, nyRef, oppdaterBestillinger, OpptattFeil, settStatus, type Endringer,
+  hentBestillinger, hentKlubbtider, hentPriser, hentSperringer, lagreBestillinger, nyRef, oppdaterBestillinger, OpptattFeil, settStatus, skrivLogg, type Endringer,
 } from '@/lib/lager';
-import { byggBelegg, halvdeler, prisFor, slot, type Bane, type Status } from '@/lib/tilgjengelighet';
-import { erGyldigDato, naIOslo } from '@/lib/dato';
+import { byggBelegg, halvdeler, prisFor, slot, type Bane, type Bestilling, type Status } from '@/lib/tilgjengelighet';
+import { erGyldigDato, langDato, naIOslo, tidsrom } from '@/lib/dato';
+
+// «SNAK-AB12C Ola Nordmann: tirsdag 1. desember 16:00–17:00 hel, …» for loggen.
+function beskriv(linjer: Pick<Bestilling, 'ref' | 'navn' | 'dato' | 'time' | 'bane'>[]) {
+  const forste = linjer[0];
+  const timer = linjer.slice(0, 6).map(l => `${langDato(l.dato)} ${tidsrom(l.time)} ${l.bane}`).join(', ');
+  return `${forste.ref} ${forste.navn}: ${timer}${linjer.length > 6 ? ` og ${linjer.length - 6} timer til` : ''}`;
+}
+const STATUSLOGG: Record<Status, string> = { bekreftet: 'Bekreftet booking', avlyst: 'Fjernet booking', forespurt: 'Satte booking til venter' };
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +33,8 @@ export async function GET() {
 
 // Endre status ({ ider, status }) eller innhold ({ ider, endringer }).
 export async function PATCH(req: Request) {
-  if (!(await erAdmin())) return nekt();
+  const meg = await adminBruker();
+  if (!meg) return nekt();
   const { ider, status, endringer } = await req.json().catch(() => ({}));
   if (!Array.isArray(ider) || ider.length === 0 || !ider.every((i: unknown) => typeof i === 'string')) {
     return NextResponse.json({ feil: 'Ugyldig forespørsel.' }, { status: 400 });
@@ -34,7 +43,9 @@ export async function PATCH(req: Request) {
     if (status !== undefined) {
       const gyldig: Status[] = ['forespurt', 'bekreftet', 'avlyst'];
       if (!gyldig.includes(status)) return NextResponse.json({ feil: 'Ugyldig status.' }, { status: 400 });
+      const for_ = (await hentBestillinger()).filter(b => ider.includes(b.id));
       await settStatus(ider, status);
+      if (for_.length) await skrivLogg(meg, STATUSLOGG[status as Status], beskriv(for_));
       return NextResponse.json({ ok: true });
     }
 
@@ -66,7 +77,17 @@ export async function PATCH(req: Request) {
       Object.assign(ut, { dato, time, bane, pris: prisFor(bane, dato, await hentPriser()) });
     }
 
+    const for_ = (await hentBestillinger()).filter(b => ider.includes(b.id));
     await oppdaterBestillinger(ider, ut);
+    if (for_.length) {
+      const f = for_[0];
+      const hva: string[] = [];
+      if (ut.dato !== undefined && (ut.dato !== f.dato || ut.time !== f.time)) hva.push(`flyttet til ${langDato(ut.dato)} ${tidsrom(ut.time!)}`);
+      if (ut.bane !== undefined && ut.bane !== f.bane) hva.push(`${ut.bane} bane`);
+      const kontakt = (['navn', 'telefon', 'epost', 'klubb', 'kommentar'] as const).filter(k => ut[k] !== undefined && (ut[k] ?? '') !== (f[k] ?? ''));
+      if (kontakt.length) hva.push(`endret ${kontakt.join(', ')}`);
+      if (hva.length) await skrivLogg(meg, 'Endret booking', `${beskriv(for_)} · ${hva.join(', ')}`);
+    }
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof OpptattFeil) return NextResponse.json({ feil: 'Timen er booket av noen andre i mellomtiden.' }, { status: 409 });
@@ -76,7 +97,8 @@ export async function PATCH(req: Request) {
 
 // Admin legger inn en booking selv (f.eks. etter en telefon). Blir bekreftet med en gang.
 export async function POST(req: Request) {
-  if (!(await erAdmin())) return nekt();
+  const meg = await adminBruker();
+  if (!meg) return nekt();
   const b = await req.json().catch(() => ({}));
   const navn = tekst(b.navn, 120);
   const bane: Bane = b.bane === 'halv' ? 'halv' : 'hel';
@@ -93,6 +115,7 @@ export async function POST(req: Request) {
       klubb: tekst(b.klubb, 120) || null, kommentar: tekst(b.kommentar, 1000) || null,
     }]);
     await settStatus(lagret.map(l => l.id), 'bekreftet');
+    await skrivLogg(meg, 'La inn booking', beskriv(lagret));
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof OpptattFeil) return NextResponse.json({ feil: 'Timen er booket av noen andre i mellomtiden.' }, { status: 409 });

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Copy, KeyRound, Loader2, Lock, LogOut, Mail, MessageSquare, Phone, Plus, UserCheck, UserX } from 'lucide-react';
 import { SESONG, STENGTE_DAGER } from '@/lib/config';
 import { TIMER, klubbNavn, type Klubbtid, type Sperring } from '@/lib/tilgjengelighet';
-import type { Bruker, Rolle } from '@/lib/lager';
+import type { Bruker, Loggrad, Rolle } from '@/lib/lager';
 import { dagOgManed, langDato, leggTilDager, mandagI, minutter, naIOslo, ukedag, ukenummer } from '@/lib/dato';
 import { UkeOversikt, klubbFarge, tid, type SynligBestilling } from './AdminKlubber';
 import type { Api } from './AdminClient';
@@ -306,5 +306,57 @@ export function Innsyn({ bruker, onUt }: { bruker: Bruker; onUt: () => void }) {
         )}
       </main>
     </div>
+  );
+}
+
+// Logg over alt som skjer i backoffice, nyeste først, med søk.
+export function Logg() {
+  const [rader, setRader] = useState<Loggrad[] | null>(null);
+  const [sok, setSok] = useState('');
+  const [hvem, setHvem] = useState('');
+
+  useEffect(() => {
+    fetch('/api/admin/logg', { cache: 'no-store' }).then(r => r.json()).then(j => setRader(j.logg ?? []));
+  }, []);
+
+  const personer = useMemo(() => [...new Set((rader ?? []).map(r => r.hvem))].sort(), [rader]);
+  const q = sok.trim().toLowerCase();
+  const vist = (rader ?? []).filter(r =>
+    (!hvem || r.hvem === hvem) && (!q || `${r.hvem} ${r.handling} ${r.detaljer ?? ''}`.toLowerCase().includes(q)));
+
+  // Grupper på dag, så det er lett å se hva som skjedde når.
+  const dager: { dag: string; rader: Loggrad[] }[] = [];
+  for (const r of vist) {
+    const dag = new Date(r.tid).toLocaleDateString('sv-SE', { timeZone: 'Europe/Oslo' });
+    if (dager[dager.length - 1]?.dag !== dag) dager.push({ dag, rader: [] });
+    dager[dager.length - 1].rader.push(r);
+  }
+
+  return (
+    <>
+      <div className="logg-filter">
+        <input className="adm-sok" placeholder="Søk i loggen, f.eks. navn, booking eller handling" value={sok} onChange={e => setSok(e.target.value)} />
+        <select aria-label="Hvem" value={hvem} onChange={e => setHvem(e.target.value)}>
+          <option value="">Alle</option>
+          {personer.map(p => <option key={p}>{p}</option>)}
+        </select>
+      </div>
+      {!rader ? <div className="laster"><Loader2 className="spinn" size={18} /> Laster …</div>
+        : vist.length === 0 ? <div className="kort tomt">Ingenting i loggen{q || hvem ? ' som passer søket' : ' ennå'}.</div>
+        : dager.map(d => (
+          <section key={d.dag} className="kort logg-dag">
+            <h2>{langDato(d.dag)}</h2>
+            <ul className="logg">
+              {d.rader.map(r => (
+                <li key={r.id} className={r.bruker_id ? '' : 'utenfra'}>
+                  <span className="logg-tid">{new Date(r.tid).toLocaleTimeString('nb-NO', { timeZone: 'Europe/Oslo', hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="logg-hva"><strong>{r.handling}</strong>{r.detaljer && <span>{r.detaljer}</span>}</span>
+                  <span className="logg-hvem">{r.hvem}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+    </>
   );
 }

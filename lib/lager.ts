@@ -35,7 +35,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T
 export const erDemo = () => supabase() === null;
 
 const minne = globalThis as unknown as { __snak?: { bestillinger: Bestilling[]; sperringer: Sperring[] } };
-const demoEkstra = globalThis as unknown as { __snakPriser?: Priser; __snakKlubbtider?: Klubbtid[]; __snakBrukere?: BrukerMedHash[] };
+const demoEkstra = globalThis as unknown as { __snakPriser?: Priser; __snakKlubbtider?: Klubbtid[]; __snakBrukere?: BrukerMedHash[]; __snakLogg?: Loggrad[] };
 const demo = () => (minne.__snak ??= { bestillinger: [], sperringer: [] });
 
 export function nyRef(): string {
@@ -186,4 +186,25 @@ export async function markerInne(id: string): Promise<void> {
     return;
   }
   await rpc('snak_bruker_inne', { p_id: id });
+}
+
+// Logg over handlinger i backoffice. Skriving feiler aldri handlingen selv.
+export type Loggrad = { id: number; tid: string; bruker_id: string | null; hvem: string; handling: string; detaljer: string | null };
+const demoLogg = () => (demoEkstra.__snakLogg ??= []);
+
+export async function skrivLogg(hvem: { id?: string | null; navn: string }, handling: string, detaljer?: string): Promise<void> {
+  try {
+    if (erDemo()) {
+      demoLogg().unshift({ id: demoLogg().length + 1, tid: new Date().toISOString(), bruker_id: hvem.id ?? null, hvem: hvem.navn, handling, detaljer: detaljer ?? null });
+      return;
+    }
+    await rpc('snak_skriv_logg', { p_bruker: hvem.id ?? null, p_hvem: hvem.navn, p_handling: handling, p_detaljer: detaljer ?? null });
+  } catch (e) {
+    console.error('Kunne ikke skrive logg', e);
+  }
+}
+
+export async function hentLogg(antall = 1000): Promise<Loggrad[]> {
+  if (erDemo()) return demoLogg().slice(0, antall);
+  return rpc<Loggrad[]>('snak_hent_logg', { p_antall: antall });
 }

@@ -78,3 +78,9 @@ export async function harRolle(rolle: Rolle): Promise<boolean> {
 }
 
 export const erAdmin = () => harRolle('admin');
+
+// Den innloggede brukeren hvis den er admin, ellers null.
+export async function adminBruker(): Promise<Bruker | null> {
+  const b = await innlogget();
+  return b?.rolle === 'admin' ? b : null;
+}

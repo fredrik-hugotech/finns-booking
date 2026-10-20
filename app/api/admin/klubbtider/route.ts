@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { erAdmin } from '@/lib/tilgang';
-import { fjernKlubbtid, hentBestillinger, hentKlubbtider, lagreKlubbtid } from '@/lib/lager';
-import { halvdeler, type Bane, type Bestilling, type Klubbtid } from '@/lib/tilgjengelighet';
+import { adminBruker, erAdmin } from '@/lib/tilgang';
+import { fjernKlubbtid, hentBestillinger, hentKlubbtider, lagreKlubbtid, skrivLogg } from '@/lib/lager';
+import { halvdeler, klubbNavn, type Bane, type Bestilling, type Klubbtid } from '@/lib/tilgjengelighet';
 import { FORSTE_TIME, SESONG, SISTE_TIME, STENGTE_DAGER } from '@/lib/config';
 import { datoer, erGyldigDato, langDato, minutter, naIOslo, ukedag } from '@/lib/dato';
 
@@ -10,6 +10,8 @@ export const dynamic = 'force-dynamic';
 const nekt = () => NextResponse.json({ feil: 'Ikke innlogget.' }, { status: 401 });
 const tekst = (v: unknown, maks: number) => (typeof v === 'string' ? v.trim().slice(0, maks) : '');
 const KLOKKE = /^\d\d:[03]0$/;
+const DAGER = ['mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag', 'søndag'];
+const beskriv = (k: Omit<Klubbtid, 'id'>) => `${klubbNavn(k)}, ${DAGER[k.dag - 1]} ${k.fra}–${k.til}${k.bane === 'halv' ? ' (halv bane)' : ''}`;
 
 export async function GET() {
   if (!(await erAdmin())) return nekt();
@@ -41,7 +43,8 @@ function kollisjoner(k: Omit<Klubbtid, 'id'>, andre: Klubbtid[], bestillinger: B
 
 // Ny eller endret klubbtid. Frigitte datoer ligger i `unntak`.
 export async function POST(req: Request) {
-  if (!(await erAdmin())) return nekt();
+  const meg = await adminBruker();
+  if (!meg) return nekt();
   const b = await req.json().catch(() => ({}));
   const k = {
     id: typeof b.id === 'string' ? b.id : undefined,
@@ -69,14 +72,29 @@ export async function POST(req: Request) {
     const vis = opptatt.slice(0, 4).join(', ') + (opptatt.length > 4 ? ` og ${opptatt.length - 4} til` : '');
     return NextResponse.json({ feil: `Banen er alt booket ${vis}. Flytt eller fjern de bookingene først.` }, { status: 409 });
   }
+  const funnet = alle.find(x => x.id === k.id);
+  const for_ = funnet && { ...funnet, unntak: [...funnet.unntak] };
   await lagreKlubbtid(k);
+
+  if (!for_) await skrivLogg(meg, 'La til klubbtid', beskriv(k));
+  else {
+    const frigitt = k.unntak.filter(d => !for_.unntak.includes(d));
+    const tilbake = for_.unntak.filter(d => !k.unntak.includes(d));
+    for (const d of frigitt) await skrivLogg(meg, 'Frigjorde klubbtid', `${beskriv(k)} · ${langDato(d)}`);
+    for (const d of tilbake) await skrivLogg(meg, 'Ga tilbake klubbtid', `${beskriv(k)} · ${langDato(d)}`);
+    const felt = (['dag', 'fra', 'til', 'bane', 'klubb', 'lag', 'kontakt', 'telefon', 'epost'] as const).filter(f => (for_[f] ?? '') !== (k[f] ?? ''));
+    if (felt.length) await skrivLogg(meg, 'Endret klubbtid', `${beskriv(for_)} → ${beskriv(k)}${felt.some(f => ['kontakt', 'telefon', 'epost'].includes(f)) ? ` · kontakt: ${[k.kontakt, k.telefon, k.epost].filter(Boolean).join(', ') || 'ingen'}` : ''}`);
+  }
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: Request) {
-  if (!(await erAdmin())) return nekt();
+  const meg = await adminBruker();
+  if (!meg) return nekt();
   const id = new URL(req.url).searchParams.get('id');
   if (!id) return NextResponse.json({ feil: 'Mangler id.' }, { status: 400 });
+  const k = (await hentKlubbtider()).find(x => x.id === id);
   await fjernKlubbtid(id);
+  if (k) await skrivLogg(meg, 'Fjernet klubbtid', beskriv(k));
   return NextResponse.json({ ok: true });
 }

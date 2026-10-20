@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { OKT_COOKIE, hashPassord, innlogget, lagOkt, oktValg, riktigPassord } from '@/lib/tilgang';
-import { hentBruker, lagreBruker } from '@/lib/lager';
+import { hentBruker, lagreBruker, skrivLogg } from '@/lib/lager';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +24,7 @@ export async function PATCH(req: Request) {
   }
   const passord_hash = hashPassord(nytt);
   await lagreBruker({ id: meg.id, passord_hash });
+  await skrivLogg(meg, 'Byttet eget passord');
   const { verdi, maxAge } = lagOkt(meg.id, passord_hash);
   const res = NextResponse.json({ ok: true });
   res.cookies.set(OKT_COOKIE, verdi, oktValg(maxAge));
