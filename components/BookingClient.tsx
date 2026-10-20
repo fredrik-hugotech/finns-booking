@@ -389,7 +389,7 @@ function Ramme({ children }: { children: React.ReactNode }) {
       <header className="topp">
         <div className="innhold">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Finns.Fairway" className="logo" />
+          <img src="/logo-gul.png" alt="Finns.Fairway" className="logo" />
         </div>
       </header>
       <main className="innhold">
