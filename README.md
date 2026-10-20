@@ -29,8 +29,9 @@ Kalenderen følger samme mønster som mer.golf:
 Hver person logger inn med egen e-post og passord, og har én av to tilganger:
 
 - **Admin**: alt under, inkludert brukere og priser.
-- **Innsyn**: ser bare hvem som har banen, dag for dag og uke for uke
-  (klubb, lag og navn). Ingen kontaktinfo, priser eller endringer.
+- **Innsyn**: ser hvem som har banen, dag for dag og uke for uke (klubb,
+  lag, navn og kontaktinfo med knapper for å ringe, sende SMS og e-post).
+  Ingen priser og ingen endringer.
 
 Admin legger til brukere under **Innstillinger → Brukere**. Systemet lager et
 passord som vises én gang, og som admin gir videre. Der kan admin også lage

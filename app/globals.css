@@ -433,3 +433,6 @@ h1 { font-size: 1.5rem; color: var(--gronn); margin-bottom: 2px; }
 }
 .innsyn-innhold > * { min-width: 0; }
 .innsyn-topp .adm-logo { display: block !important; height: 30px; }
+.innsyn-kontakt { display: flex; align-items: center; gap: 10px; width: 100%; padding-left: 116px; font-size: 0.88rem; }
+.innsyn-kontakt .kontaktknapper { margin-left: auto; }
+@media (max-width: 520px) { .innsyn-kontakt { padding-left: 0; } }

@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Copy, KeyRound, Loader2, Lock, LogOut, Plus, UserCheck, UserX } from 'lucide-react';
+import { Copy, KeyRound, Loader2, Lock, LogOut, Mail, MessageSquare, Phone, Plus, UserCheck, UserX } from 'lucide-react';
 import { SESONG, STENGTE_DAGER } from '@/lib/config';
-import { TIMER, klubbNavn, type OffentligKlubbtid, type Sperring } from '@/lib/tilgjengelighet';
+import { TIMER, klubbNavn, type Klubbtid, type Sperring } from '@/lib/tilgjengelighet';
 import type { Bruker, Rolle } from '@/lib/lager';
 import { dagOgManed, langDato, leggTilDager, mandagI, minutter, naIOslo, ukedag, ukenummer } from '@/lib/dato';
 import { UkeOversikt, klubbFarge, tid, type SynligBestilling } from './AdminKlubber';
@@ -11,7 +11,7 @@ import type { Api } from './AdminClient';
 
 const ROLLER: Record<Rolle, { navn: string; forklaring: string }> = {
   admin: { navn: 'Admin', forklaring: 'Kan endre alt' },
-  innsyn: { navn: 'Innsyn', forklaring: 'Ser hvem som har banen' },
+  innsyn: { navn: 'Innsyn', forklaring: 'Ser hvem som har banen, med kontaktinfo' },
 };
 const to = (t: number) => String(t).padStart(2, '0');
 const iSesong = (d: string) => (d < SESONG.fra ? SESONG.fra : d > SESONG.til ? SESONG.til : d);
@@ -132,7 +132,7 @@ export function Brukere({ meg, api }: { meg: Bruker; api: Api }) {
         <h2>Brukere</h2>
         <button className="liten-knapp primar" onClick={() => setNy(ny ? null : { navn: '', epost: '', rolle: 'innsyn' })}><Plus size={14} /> Ny bruker</button>
       </div>
-      <p className="dempet">Admin kan endre alt. Innsyn ser bare hvem som har banen, uten kontaktinfo og priser.</p>
+      <p className="dempet">Admin kan endre alt. Innsyn ser hvem som har banen og hvordan de kan nås, men ikke priser, og kan ikke endre noe.</p>
       {visPassord && <NyttPassord {...visPassord} onLukk={() => setVisPassord(null)} />}
       {ny && (
         <form className="adm-skjema" onSubmit={async e => {
@@ -187,7 +187,23 @@ export function Brukere({ meg, api }: { meg: Bruker; api: Api }) {
 }
 
 // Innsyn: hvem som har banen, uke for uke og time for time. Ingen endringer.
-type Oversikt = { bestillinger: SynligBestilling[]; klubbtider: OffentligKlubbtid[]; sperringer: Sperring[] };
+type Oversikt = { bestillinger: (SynligBestilling & { telefon: string; epost: string })[]; klubbtider: Klubbtid[]; sperringer: Sperring[] };
+
+// Navn, telefon og e-post med knapper for å ringe, sende SMS og e-post.
+function Kontaktlinje({ navn, telefon, epost }: { navn?: string | null; telefon?: string | null; epost?: string | null }) {
+  const tlf = (telefon ?? '').replace(/\s/g, '');
+  if (!navn && !tlf && !epost) return null;
+  return (
+    <span className="innsyn-kontakt">
+      <span className="dempet">{[navn, telefon].filter(Boolean).join(' · ')}</span>
+      <span className="kontaktknapper">
+        {tlf && <a href={`tel:${tlf}`} title={`Ring ${navn ?? telefon}`}><Phone size={15} /></a>}
+        {tlf && <a href={`sms:${tlf}`} title="Send SMS"><MessageSquare size={15} /></a>}
+        {epost && <a href={`mailto:${epost}`} title={`E-post til ${epost}`}><Mail size={15} /></a>}
+      </span>
+    </span>
+  );
+}
 
 export function Innsyn({ bruker, onUt }: { bruker: Bruker; onUt: () => void }) {
   const [data, setData] = useState<Oversikt | null>(null);
@@ -224,6 +240,7 @@ export function Innsyn({ bruker, onUt }: { bruker: Bruker; onUt: () => void }) {
             <span className="adm-tid">{tid(k)}</span>
             <strong>{klubbNavn(k)}</strong>
             {k.bane === 'halv' && <span className="merkelapp">Halv</span>}
+            <Kontaktlinje navn={k.kontakt} telefon={k.telefon} epost={k.epost} />
           </div>
         ),
       });
@@ -238,6 +255,7 @@ export function Innsyn({ bruker, onUt }: { bruker: Bruker; onUt: () => void }) {
             <strong>{b.navn}{b.klubb ? ` · ${b.klubb}` : ''}</strong>
             <span className="merkelapp">{b.bane === 'hel' ? 'Hel' : 'Halv'}</span>
             {b.status === 'forespurt' && <span className="status forespurt">Ikke bekreftet</span>}
+            <Kontaktlinje telefon={b.telefon} epost={b.epost} />
           </div>
         ),
       });
