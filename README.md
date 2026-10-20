@@ -24,6 +24,15 @@ Kalenderen følger samme mønster som mer.golf:
 - Bestillingen sendes som en forespørsel med referanse (SNAK-XXXXX) og blir
   bindende når betalingen er mottatt med Vipps.
 
+### Førstemann til mølla
+
+Timene du velger holdes av til deg i 10 minutter, og andre ser dem som
+opptatt. Hvis to velger samme time nesten samtidig, avgjør databasen hvem
+som var først, og den andre får beskjed med en gang. Mens skjemaet fylles
+ut, fornyes holdet. Når bestillingen sendes, blir de holdte timene en
+booking i samme operasjon, så ingen kan snike seg imellom. Lukkes siden,
+slippes timene med en gang.
+
 ## Backoffice (`/admin`)
 
 Hver person logger inn med egen e-post og passord, og har én av to tilganger:

@@ -125,12 +125,18 @@ export function byggBelegg(
   bestillinger: Pick<Bestilling, 'dato' | 'time' | 'bane' | 'status'>[],
   sperringer: Sperring[],
   klubbtider: OffentligKlubbtid[],
+  holdt: Pick<Bestilling, 'dato' | 'time' | 'bane'>[] = [],
 ): Belegg {
   const brukt: Record<string, number> = {};
   for (const b of bestillinger) {
     if (b.status === 'avlyst') continue;
     const k = nokkel(b.dato, b.time);
     brukt[k] = (brukt[k] ?? 0) + halvdeler(b.bane);
+  }
+  // Timer andre holder på å booke, teller som opptatt.
+  for (const h of holdt) {
+    const k = nokkel(h.dato, h.time);
+    brukt[k] = (brukt[k] ?? 0) + halvdeler(h.bane);
   }
   return { brukt, sperringer, klubbtider: klubbtider.map(k => ('kontakt' in k ? utenKontakt(k as Klubbtid) : k)) };
 }

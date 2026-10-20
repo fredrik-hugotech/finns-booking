@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID, randomInt } from 'crypto';
-import type { Bestilling, Klubbtid, Sperring, Status } from './tilgjengelighet';
+import { halvdeler, type Bane, type Bestilling, type Klubbtid, type Sperring, type Status } from './tilgjengelighet';
 import { KLUBBTIDER_START } from './klubbtider-start';
 import { STANDARD_PRIS, type Priser } from './config';
 
@@ -35,7 +35,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T
 export const erDemo = () => supabase() === null;
 
 const minne = globalThis as unknown as { __snak?: { bestillinger: Bestilling[]; sperringer: Sperring[] } };
-const demoEkstra = globalThis as unknown as { __snakPriser?: Priser; __snakKlubbtider?: Klubbtid[]; __snakBrukere?: BrukerMedHash[]; __snakLogg?: Loggrad[] };
+const demoEkstra = globalThis as unknown as { __snakPriser?: Priser; __snakKlubbtider?: Klubbtid[]; __snakBrukere?: BrukerMedHash[]; __snakLogg?: Loggrad[]; __snakHoldt?: (Holdt & { okt: string; utloper: number })[] };
 const demo = () => (minne.__snak ??= { bestillinger: [], sperringer: [] });
 
 export function nyRef(): string {
@@ -58,13 +58,17 @@ export async function hentSperringer(): Promise<Sperring[]> {
 // Lagrer alle linjene samlet, eller ingen. Databasen sjekker selv at ingen
 // time blir overbooket (trigger i supabase/schema.sql), så to som trykker
 // samtidig kan ikke få samme bane.
-export async function lagreBestillinger(linjer: NyBestilling[]): Promise<Bestilling[]> {
+// Med `okt` slippes øktas holdte timer i samme transaksjon som bestillingen
+// lagres, så ingen andre kan ta dem i mellomtiden.
+export async function lagreBestillinger(linjer: NyBestilling[], okt?: string): Promise<Bestilling[]> {
   if (erDemo()) {
+    if (okt) demoEkstra.__snakHoldt = demoHoldt().filter(h => h.okt !== okt);
     const naa = new Date().toISOString();
     const nye = linjer.map(l => ({ ...l, id: randomUUID(), status: 'forespurt' as Status, opprettet: naa }));
     demo().bestillinger.push(...nye);
     return nye;
   }
+  if (okt) return rpc<Bestilling[]>('snak_bestill', { p_okt: okt, p_linjer: linjer });
   return rpc<Bestilling[]>('snak_lagre_bestillinger', { p_linjer: linjer });
 }
 
@@ -207,4 +211,42 @@ export async function skrivLogg(hvem: { id?: string | null; navn: string }, hand
 export async function hentLogg(antall = 1000): Promise<Loggrad[]> {
   if (erDemo()) return demoLogg().slice(0, antall);
   return rpc<Loggrad[]>('snak_hent_logg', { p_antall: antall });
+}
+
+// Holdte timer: valgte timer holdes av for en nettleser-økt i noen minutter,
+// så den som valgte først får dem mens skjemaet fylles ut.
+export const HOLD_MINUTTER = 10;
+export type Holdt = { dato: string; time: number; bane: Bane };
+const demoHoldt = () => (demoEkstra.__snakHoldt ??= []);
+
+// Aktive holdte timer, unntatt den gitte øktas egne.
+export async function hentHoldt(unntattOkt?: string): Promise<Holdt[]> {
+  if (erDemo()) {
+    return demoHoldt().filter(h => h.utloper > Date.now() && h.okt !== unntattOkt).map(({ dato, time, bane }) => ({ dato, time, bane }));
+  }
+  const rader = await rpc<{ h_dato: string; h_time: number; h_bane: Bane }[]>('snak_hent_holdt', { p_okt: unntattOkt ?? null });
+  return rader.map(r => ({ dato: r.h_dato, time: r.h_time, bane: r.h_bane }));
+}
+
+// Hold av timene for økta (erstatter det den holdt før). `plass` er ledige
+// halvdeler etter klubbtider og sperringer. Svarer med timene som ikke fikk plass.
+export async function hold(okt: string, linjer: (Holdt & { plass: number })[]): Promise<{ dato: string; time: number }[]> {
+  if (erDemo()) {
+    const na = Date.now();
+    const andre = demoHoldt().filter(h => h.okt !== okt && h.utloper > na);
+    const avvist: { dato: string; time: number }[] = [];
+    const mine: (Holdt & { okt: string; utloper: number })[] = [];
+    for (const l of linjer) {
+      const brukt = demo().bestillinger.filter(b => b.status !== 'avlyst' && b.dato === l.dato && b.time === l.time).reduce((n, b) => n + halvdeler(b.bane), 0)
+        + andre.filter(h => h.dato === l.dato && h.time === l.time).reduce((n, h) => n + halvdeler(h.bane), 0);
+      if (brukt + halvdeler(l.bane) > l.plass) avvist.push({ dato: l.dato, time: l.time });
+      else mine.push({ dato: l.dato, time: l.time, bane: l.bane, okt, utloper: na + HOLD_MINUTTER * 60_000 });
+    }
+    demoEkstra.__snakHoldt = [...andre, ...mine];
+    return avvist;
+  }
+  const rader = await rpc<{ avvist_dato: string; avvist_time: number }[]>('snak_hold', {
+    p_okt: okt, p_linjer: linjer, p_minutter: HOLD_MINUTTER,
+  });
+  return rader.map(r => ({ dato: r.avvist_dato, time: r.avvist_time }));
 }

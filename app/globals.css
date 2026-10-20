@@ -548,7 +548,7 @@ main.innhold > h1 { font-size: 2.3rem; line-height: 1.08; color: var(--gronn); f
 
 @media (max-width: 480px) {
   .topp { padding: 10px 0 0; }
-  .topp .innhold { margin: 0 10px; padding: 11px 20px; }
+  .topp .innhold { margin: 0 16px; padding: 11px 20px; }
   .logo { height: 28px; }
   main.innhold { padding-top: 22px; }
   main.innhold > h1 { font-size: 1.75rem; }
@@ -559,3 +559,15 @@ main.innhold > h1 { font-size: 2.3rem; line-height: 1.08; color: var(--gronn); f
 }
 .fot { max-width: 728px; }
 @media (max-width: 480px) { .fot { margin: 0 10px; } }
+
+/* Rett linje: dagraden går helt ut til kantene som tidslinja under,
+   og passerte dager beholder en svak ramme så raden ikke ser forskjøvet ut. */
+.dagstripe { padding: 6px 0 4px; }
+.dagbrikke:disabled { background: transparent; border: 1px dashed var(--linje); }
+
+/* Bunnfelt som et helt grønt bånd nederst, som på finnsfairway.no */
+.fot {
+  max-width: none; margin: 0; border-radius: 0;
+  padding: 28px max(16px, calc((100% - 728px) / 2)) 40px;
+}
+@media (max-width: 480px) { .fot { margin: 0; padding: 22px 20px 32px; } }

@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
-import { hentBestillinger, hentKlubbtider, hentPriser, hentSperringer, skrivLogg, lagreBestillinger, nyRef, OpptattFeil } from '@/lib/lager';
+import { hentBestillinger, hentHoldt, hentKlubbtider, hentPriser, hentSperringer, skrivLogg, lagreBestillinger, nyRef, OpptattFeil } from '@/lib/lager';
 import { byggBelegg, halvdeler, nokkel, prisFor, slot, type Bane } from '@/lib/tilgjengelighet';
 import { SESONG } from '@/lib/config';
 import { erGyldigDato, langDato, naIOslo, tidsrom } from '@/lib/dato';
 
 export const dynamic = 'force-dynamic';
+
+import { gyldigOkt } from '@/lib/okt';
 
 const MAKS_LINJER = 150;
 
@@ -36,10 +38,12 @@ export async function POST(req: Request) {
   }
 
   try {
-    const [bestillinger, sperringer, priser, klubbtider] = await Promise.all([
-      hentBestillinger(SESONG.fra), hentSperringer(), hentPriser(), hentKlubbtider(),
+    // Egne holdte timer er ledige for denne økta; andres teller som opptatt.
+    const okt = gyldigOkt(body.okt) ? body.okt : undefined;
+    const [bestillinger, sperringer, priser, klubbtider, holdt] = await Promise.all([
+      hentBestillinger(SESONG.fra), hentSperringer(), hentPriser(), hentKlubbtider(), hentHoldt(okt),
     ]);
-    const belegg = byggBelegg(bestillinger, sperringer, klubbtider);
+    const belegg = byggBelegg(bestillinger, sperringer, klubbtider, holdt);
     const na = naIOslo();
 
     // Sjekk hver time mot det som allerede er tatt, inkludert tidligere linjer
@@ -63,7 +67,7 @@ export async function POST(req: Request) {
     const lagret = await lagreBestillinger(linjer.map(l => ({
       ref, dato: l.dato, time: l.time, bane: l.bane, pris: prisFor(l.bane, l.dato, priser),
       navn, telefon, epost, klubb, kommentar, serie,
-    })));
+    })), okt);
     const sum = lagret.reduce((s, b) => s + b.pris, 0);
     await skrivLogg({ navn: `${navn}${klubb ? ` (${klubb})` : ''}` }, 'Ny forespørsel fra nettsiden', `${ref}: ${lagret.length} ${lagret.length === 1 ? 'time' : 'timer'}, ${sum} kr`);
     return NextResponse.json({ ref, antall: lagret.length, sum });

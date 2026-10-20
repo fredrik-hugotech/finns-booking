@@ -332,3 +332,101 @@ begin
   return query select * from snak_logg order by tid desc limit least(coalesce(p_antall, 500), 5000);
 end
 $fn$;
+
+-- Holdte timer: når noen velger timer på bookingsiden, holdes de av i noen
+-- minutter så førstemann får dem mens skjemaet fylles ut. `okt` er en
+-- tilfeldig id per nettleser. Utløpte rader teller ikke og ryddes bort.
+create table if not exists snak_holdt (
+  okt     text not null,
+  dato    date not null,
+  time    smallint not null,
+  bane    text not null check (bane in ('hel', 'halv')),
+  utloper timestamptz not null,
+  primary key (okt, dato, time)
+);
+alter table snak_holdt enable row level security;
+create index if not exists snak_holdt_tid on snak_holdt (dato, time);
+
+-- Kapasitetssjekken teller nå også andres holdte timer.
+create or replace function sjekk_kapasitet() returns trigger
+language plpgsql as $$
+declare
+  brukt integer;
+  ny integer := case when new.bane = 'hel' then 2 else 1 end;
+begin
+  if new.status = 'avlyst' then
+    return new;
+  end if;
+  perform pg_advisory_xact_lock(hashtext(new.dato::text || ':' || new.time::text));
+  select coalesce(sum(case when bane = 'hel' then 2 else 1 end), 0)
+    into brukt
+    from bestillinger
+   where dato = new.dato and time = new.time and status <> 'avlyst' and id <> new.id;
+  brukt := brukt + coalesce((select sum(case when bane = 'hel' then 2 else 1 end) from snak_holdt
+                             where dato = new.dato and time = new.time and utloper > now()), 0);
+  if brukt + ny > 2 then
+    raise exception 'OPPTATT %', new.dato || ' ' || new.time;
+  end if;
+  return new;
+end $$;
+
+-- Hold av timer for en økt. Erstatter øktas tidligere holdte timer (de
+-- gamle settes som utløpt). `plass` per linje er halvdelene som er ledige
+-- etter klubbtider og sperringer (regnes på serveren). Svarer med linjene
+-- som ikke fikk plass. Låsen er den samme som i kapasitetstriggeren, så
+-- to som velger samme time samtidig blir avgjort i rekkefølge.
+create or replace function snak_hold(p_nokkel text, p_okt text, p_linjer jsonb, p_minutter integer)
+returns table (avvist_dato date, avvist_time smallint)
+language plpgsql security definer set search_path = public as $fn$
+declare
+  r record;
+  brukt integer;
+begin
+  perform snak_sjekk(p_nokkel);
+  update snak_holdt set utloper = now() - interval '1 second' where okt = p_okt;
+  for r in select * from jsonb_to_recordset(p_linjer) as x(dato date, time smallint, bane text, plass integer) order by 1, 2 loop
+    perform pg_advisory_xact_lock(hashtext(r.dato::text || ':' || r.time::text));
+    select coalesce(sum(case when b.bane = 'hel' then 2 else 1 end), 0) into brukt
+      from bestillinger b where b.dato = r.dato and b.time = r.time and b.status <> 'avlyst';
+    brukt := brukt + coalesce((select sum(case when h.bane = 'hel' then 2 else 1 end) from snak_holdt h
+                               where h.dato = r.dato and h.time = r.time and h.okt <> p_okt and h.utloper > now()), 0);
+    if brukt + (case when r.bane = 'hel' then 2 else 1 end) > r.plass then
+      avvist_dato := r.dato;
+      avvist_time := r.time;
+      return next;
+    else
+      insert into snak_holdt (okt, dato, time, bane, utloper)
+      values (p_okt, r.dato, r.time, r.bane, now() + make_interval(mins => p_minutter))
+      on conflict on constraint snak_holdt_pkey do update set bane = excluded.bane, utloper = excluded.utloper;
+    end if;
+  end loop;
+end
+$fn$;
+
+-- Andres holdte timer (for visningen av ledige timer).
+create or replace function snak_hent_holdt(p_nokkel text, p_okt text)
+returns table (h_dato date, h_time smallint, h_bane text)
+language plpgsql security definer set search_path = public stable as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  return query select h.dato, h.time, h.bane from snak_holdt h
+    where h.utloper > now() and (p_okt is null or h.okt <> p_okt);
+end
+$fn$;
+
+-- Bestill: slipper øktas holdte timer og lagrer bestillingen i samme
+-- transaksjon, så ingen kan snike seg imellom.
+create or replace function snak_bestill(p_nokkel text, p_okt text, p_linjer jsonb) returns setof bestillinger
+language plpgsql security definer set search_path = public as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  if p_okt is not null then
+    delete from snak_holdt where okt = p_okt;
+  end if;
+  return query
+    insert into bestillinger (ref, dato, time, bane, navn, telefon, epost, klubb, kommentar, pris, serie)
+    select ref, dato, time, bane, navn, telefon, epost, klubb, kommentar, pris, serie
+      from jsonb_to_recordset(p_linjer) as x(ref text, dato date, time smallint, bane text, navn text, telefon text, epost text, klubb text, kommentar text, pris integer, serie text)
+    returning *;
+end
+$fn$;

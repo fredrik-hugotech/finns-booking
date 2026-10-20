@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminBruker, erAdmin } from '@/lib/tilgang';
 import {
-  hentBestillinger, hentKlubbtider, hentPriser, hentSperringer, lagreBestillinger, nyRef, oppdaterBestillinger, OpptattFeil, settStatus, skrivLogg, type Endringer,
+  hentBestillinger, hentHoldt, hentKlubbtider, hentPriser, hentSperringer, lagreBestillinger, nyRef, oppdaterBestillinger, OpptattFeil, settStatus, skrivLogg, type Endringer,
 } from '@/lib/lager';
 import { byggBelegg, halvdeler, prisFor, slot, type Bane, type Bestilling, type Status } from '@/lib/tilgjengelighet';
 import { erGyldigDato, langDato, naIOslo, tidsrom } from '@/lib/dato';
@@ -21,8 +21,8 @@ const tekst = (v: unknown, maks: number) => (typeof v === 'string' ? v.trim().sl
 
 // Er timen ledig for denne banestørrelsen, når vi ser bort fra bestillingene i `unntatt`?
 async function ledig(dato: string, time: number, bane: Bane, unntatt: string[] = []) {
-  const [bestillinger, sperringer, klubbtider] = await Promise.all([hentBestillinger(), hentSperringer(), hentKlubbtider()]);
-  const belegg = byggBelegg(bestillinger.filter(b => !unntatt.includes(b.id)), sperringer, klubbtider);
+  const [bestillinger, sperringer, klubbtider, holdt] = await Promise.all([hentBestillinger(), hentSperringer(), hentKlubbtider(), hentHoldt()]);
+  const belegg = byggBelegg(bestillinger.filter(b => !unntatt.includes(b.id)), sperringer, klubbtider, holdt);
   return slot(dato, time, belegg, naIOslo()).ledigeHalvdeler >= halvdeler(bane);
 }
 
@@ -72,7 +72,7 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ feil: 'Ugyldig dato, tid eller bane.' }, { status: 400 });
       }
       if (!(await ledig(dato, time, bane, [naa.id]))) {
-        return NextResponse.json({ feil: 'Den tiden er ikke ledig.' }, { status: 409 });
+        return NextResponse.json({ feil: 'Den tiden er ikke ledig, eller noen holder på å booke den akkurat nå.' }, { status: 409 });
       }
       Object.assign(ut, { dato, time, bane, pris: prisFor(bane, dato, await hentPriser()) });
     }
@@ -90,7 +90,7 @@ export async function PATCH(req: Request) {
     }
     return NextResponse.json({ ok: true });
   } catch (err) {
-    if (err instanceof OpptattFeil) return NextResponse.json({ feil: 'Timen er booket av noen andre i mellomtiden.' }, { status: 409 });
+    if (err instanceof OpptattFeil) return NextResponse.json({ feil: 'Timen ble tatt i mellomtiden, eller noen holder på å booke den. Prøv igjen om litt.' }, { status: 409 });
     throw err;
   }
 }
@@ -106,7 +106,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ feil: 'Fyll inn navn.' }, { status: 400 });
   }
   if (!(await ledig(b.dato, b.time, bane))) {
-    return NextResponse.json({ feil: 'Den tiden er ikke ledig.' }, { status: 409 });
+    return NextResponse.json({ feil: 'Den tiden er ikke ledig, eller noen holder på å booke den akkurat nå.' }, { status: 409 });
   }
   try {
     const lagret = await lagreBestillinger([{
@@ -118,7 +118,7 @@ export async function POST(req: Request) {
     await skrivLogg(meg, 'La inn booking', beskriv(lagret));
     return NextResponse.json({ ok: true });
   } catch (err) {
-    if (err instanceof OpptattFeil) return NextResponse.json({ feil: 'Timen er booket av noen andre i mellomtiden.' }, { status: 409 });
+    if (err instanceof OpptattFeil) return NextResponse.json({ feil: 'Timen ble tatt i mellomtiden, eller noen holder på å booke den. Prøv igjen om litt.' }, { status: 409 });
     throw err;
   }
 }

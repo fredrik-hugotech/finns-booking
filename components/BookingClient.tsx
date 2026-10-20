@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
 import { ARENA, SESONG, STANDARD_PRIS, type Priser } from '@/lib/config';
 import {
@@ -19,6 +19,20 @@ type Kvittering = { ref: string; antall: number; sum: number; linjer: Valgt[] };
 
 const DAGER = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
 const ALLE_DATOER = datoer(SESONG.fra, SESONG.til);
+
+// Id for denne nettleseren, så valgte timer kan holdes av til den.
+function lagOkt(): string {
+  const ny = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}-okt`);
+  try {
+    const lagret = sessionStorage.getItem('snak_okt');
+    if (lagret) return lagret;
+    const id = ny();
+    sessionStorage.setItem('snak_okt', id);
+    return id;
+  } catch {
+    return ny();
+  }
+}
 
 const vKey = (v: { dato: string; time: number }) => nokkel(v.dato, v.time);
 const sorter = (l: Valgt[]) => [...l].sort((a, b) => vKey(a).localeCompare(vKey(b)));
@@ -115,10 +129,14 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
   const [valgt, setValgt] = useState<Valgt[]>([]);
   const [steg, setSteg] = useState<'velg' | 'skjema'>('velg');
   const [kvittering, setKvittering] = useState<Kvittering | null>(null);
+  const [okt] = useState(lagOkt);
+  const [holdtTil, setHoldtTil] = useState<number | null>(null);
+  const [tatt, setTatt] = useState<string | null>(null);
+  const [, setTikk] = useState(0);
 
   async function last() {
     try {
-      const r = await fetch('/api/tilgjengelighet', { cache: 'no-store' });
+      const r = await fetch(`/api/tilgjengelighet?okt=${encodeURIComponent(okt)}`, { cache: 'no-store' });
       const j = await r.json();
       if (!r.ok) throw new Error(j.feil);
       setBelegg(j.belegg);
@@ -139,7 +157,51 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
       const forste = ALLE_DATOER.find(d => TIMER.some(t => slot(d, t, j.belegg, j.na).ledigeHalvdeler > 0));
       if (forste) setDag(forste);
     });
+    // Hent på nytt jevnlig, så timer andre har tatt eller holder forsvinner.
+    const t = setInterval(last, 30_000);
+    return () => clearInterval(t);
   }, []);
+
+  // Hold av valgte timer til denne nettleseren, så førstemann får dem mens
+  // skjemaet fylles ut. Sendes når valget endres, og jevnlig i skjemaet.
+  const holdNr = useRef(0);
+  async function holdAv(linjer: Valgt[]) {
+    const nr = ++holdNr.current;
+    try {
+      const r = await fetch('/api/hold', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ okt, linjer: linjer.map(({ dato, time, bane }) => ({ dato, time, bane })) }),
+      });
+      const j = await r.json();
+      if (!r.ok || nr !== holdNr.current) return;
+      const avvist: { dato: string; time: number }[] = j.avvist ?? [];
+      setHoldtTil(linjer.length - avvist.length > 0 ? Date.now() + j.minutter * 60_000 : null);
+      if (avvist.length) {
+        setValgt(p => p.filter(v => !avvist.some(a => a.dato === v.dato && a.time === v.time)));
+        setTatt(`Noen andre rakk å velge ${avvist.map(a => `${dagOgManed(a.dato, true)} ${kl(a.time)}`).join(', ')} akkurat nå.`);
+        last();
+      }
+    } catch {
+      // Nettfeil: bestillingen sjekkes uansett når den sendes.
+    }
+  }
+  useEffect(() => {
+    const t = setTimeout(() => holdAv(valgt), 250);
+    return () => clearTimeout(t);
+  }, [valgt]);
+  useEffect(() => {
+    if (steg !== 'skjema' || valgt.length === 0) return;
+    const t = setInterval(() => holdAv(valgt), 2 * 60_000);
+    return () => clearInterval(t);
+  }, [steg, valgt]);
+  useEffect(() => {
+    // Slipp timene med en gang hvis siden lukkes.
+    const slipp = () => navigator.sendBeacon?.('/api/hold', JSON.stringify({ okt, linjer: [] }));
+    window.addEventListener('pagehide', slipp);
+    const t = setInterval(() => setTikk(n => n + 1), 15_000);
+    return () => { window.removeEventListener('pagehide', slipp); clearInterval(t); };
+  }, []);
+  const minutterIgjen = holdtTil && valgt.length ? Math.max(0, Math.ceil((holdtTil - Date.now()) / 60_000)) : null;
 
   const iDag = na?.dato ?? SESONG.fra;
   // Antall ledige halvdeler: 2 = hel bane ledig, 1 = bare halv bane.
@@ -183,15 +245,15 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
   }
 
   if (kvittering) {
-    return <Bekreftelse k={kvittering} onNy={() => { setKvittering(null); setValgt([]); setSteg('velg'); last(); }} />;
+    return <Bekreftelse k={kvittering} onNy={() => { setKvittering(null); last(); }} />;
   }
 
   if (steg === 'skjema') {
     return (
       <Ramme>
-        <Skjema valgt={valgt} sum={sum} onTilbake={() => setSteg('velg')}
+        <Skjema valgt={valgt} sum={sum} okt={okt} minutterIgjen={minutterIgjen} onTilbake={() => setSteg('velg')}
           onFjern={ls => setValgt(p => p.filter(v => !ls.includes(v)))}
-          onFerdig={setKvittering} onOpptatt={last} />
+          onFerdig={k => { setKvittering(k); setValgt([]); setSteg('velg'); }} onOpptatt={last} />
       </Ramme>
     );
   }
@@ -234,6 +296,7 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
     <Ramme>
       {demo && <p className="melding">Demo: bestillinger lagres ikke permanent.</p>}
       {lastFeil && <p className="melding feil">{lastFeil} <button className="lenke" onClick={last}>Prøv igjen</button></p>}
+      {tatt && <p className="melding feil">{tatt} <button className="lenke" onClick={() => setTatt(null)}>OK</button></p>}
 
       <div className="visning" role="tablist">
         <button role="tab" aria-selected={visning === 'enkelt'} className={visning === 'enkelt' ? 'aktiv' : ''} onClick={() => setVisning('enkelt')}>Enkelttimer</button>
@@ -346,7 +409,7 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
           <div className="bunn-innhold">
             <div>
               <strong>{valgt.length} {valgt.length === 1 ? 'time' : 'timer'}</strong>
-              <span>{kr(sum)}</span>
+              <span>{kr(sum)}{minutterIgjen ? ` · holdt av til deg i ${minutterIgjen} min` : ''}</span>
             </div>
             <button className="lenke" onClick={() => setValgt([])}>Tøm</button>
             <button className="knapp" onClick={() => { setSteg('skjema'); window.scrollTo(0, 0); }}>Fortsett</button>
@@ -404,9 +467,11 @@ function Ramme({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Skjema({ valgt, sum, onTilbake, onFjern, onFerdig, onOpptatt }: {
+function Skjema({ valgt, sum, okt, minutterIgjen, onTilbake, onFjern, onFerdig, onOpptatt }: {
   valgt: Valgt[];
   sum: number;
+  okt: string;
+  minutterIgjen: number | null;
   onTilbake: () => void;
   onFjern: (ls: Valgt[]) => void;
   onFerdig: (k: Kvittering) => void;
@@ -430,7 +495,7 @@ function Skjema({ valgt, sum, onTilbake, onFjern, onFerdig, onOpptatt }: {
       const r = await fetch('/api/bestill', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...f, linjer: valgt, serie }),
+        body: JSON.stringify({ ...f, okt, linjer: valgt, serie }),
       });
       const j = await r.json();
       if (!r.ok) {
@@ -456,6 +521,7 @@ function Skjema({ valgt, sum, onTilbake, onFjern, onFerdig, onOpptatt }: {
       <button type="button" className="lenke" onClick={onTilbake}>&larr; Tilbake til ledige timer</button>
 
       <h2 className="seksjon">Din bestilling</h2>
+      {minutterIgjen ? <p className="hjelp">Timene er holdt av til deg i {minutterIgjen} min, så ingen andre kan ta dem mens du fyller ut.</p> : null}
       <ul className="oppsummering">
         {oppsummer(valgt).map(l => (
           <li key={vKey(l.timer[0]) + l.timer.length}>
