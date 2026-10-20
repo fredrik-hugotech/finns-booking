@@ -24,9 +24,21 @@ Kalenderen følger samme mønster som mer.golf:
 - Bestillingen sendes som en forespørsel med referanse (SNAK-XXXXX) og blir
   bindende når betalingen er mottatt med Vipps.
 
-## For Finns.Fairway (`/admin`)
+## Backoffice (`/admin`)
 
-Bygget som admin i mer.golf: sidemeny på PC, fanelinje nederst på mobil.
+Hver person logger inn med egen e-post og passord, og har én av to tilganger:
+
+- **Admin**: alt under, inkludert brukere og priser.
+- **Innsyn**: ser bare hvem som har banen, dag for dag og uke for uke
+  (klubb, lag og navn). Ingen kontaktinfo, priser eller endringer.
+
+Admin legger til brukere under **Innstillinger → Brukere**. Systemet lager et
+passord som vises én gang, og som admin gir videre. Der kan admin også lage
+nytt passord, bytte tilgang og stenge brukere. Alle kan bytte sitt eget
+passord. En stengt bruker eller en bruker med nytt passord blir logget ut med
+en gang.
+
+Admin er bygget som admin i mer.golf: sidemeny på PC, fanelinje nederst på mobil.
 
 - **Kalender**: ukeoversikt som regnearket, der hver halvtime viser hvem som
   har banen (klubbene i hver sin farge, kunder med navn, venter i oransje).

@@ -1,10 +1,10 @@
 import { AdminClient } from '@/components/AdminClient';
-import { erAdmin } from '@/lib/admin';
+import { innlogget } from '@/lib/tilgang';
 import { erDemo } from '@/lib/lager';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Admin – vinteråpen arena', robots: { index: false } };
+export const metadata = { title: 'Backoffice – vinteråpen arena', robots: { index: false } };
 
-export default function Page() {
-  return <AdminClient innlogget={erAdmin()} demo={erDemo()} />;
+export default async function Page() {
+  return <AdminClient bruker={await innlogget()} demo={erDemo()} />;
 }

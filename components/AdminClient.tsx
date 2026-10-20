@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
-  Check, X, LogOut, Trash2, Loader2, Lock, Inbox, CalendarDays, Ban, List, Users, Phone, Mail, MessageSquare, Pencil, Tag, Shield,
+  Check, X, LogOut, Trash2, Loader2, Inbox, CalendarDays, Ban, List, Users, Phone, Mail, MessageSquare, Pencil, Settings, Shield,
 } from 'lucide-react';
 import { SESONG, STANDARD_PRIS, STENGTE_DAGER, type Priser } from '@/lib/config';
 import {
@@ -10,9 +10,11 @@ import {
 } from '@/lib/tilgjengelighet';
 import { PrisKontekst, usePris } from './Priser';
 import { Klubber, Klubbrad, UkeOversikt, klubbFarge } from './AdminKlubber';
+import { Brukere, Innsyn, Login, MittPassord, loggUt } from './Backoffice';
+import type { Bruker } from '@/lib/lager';
 import { dagOgManed, datoer, kr, langDato, leggTilDager, mandagI, minutter, naIOslo, tidsrom, ukedag, ukenummer } from '@/lib/dato';
 
-type Fane = 'kalender' | 'foresporsler' | 'bookinger' | 'klubber' | 'kunder' | 'sperringer' | 'priser';
+type Fane = 'kalender' | 'foresporsler' | 'bookinger' | 'klubber' | 'kunder' | 'sperringer' | 'innstillinger';
 const FANER: { key: Fane; navn: string; ikon: typeof Inbox }[] = [
   { key: 'kalender', navn: 'Kalender', ikon: CalendarDays },
   { key: 'foresporsler', navn: 'Forespørsler', ikon: Inbox },
@@ -20,7 +22,7 @@ const FANER: { key: Fane; navn: string; ikon: typeof Inbox }[] = [
   { key: 'klubber', navn: 'Klubber', ikon: Shield },
   { key: 'kunder', navn: 'Kunder', ikon: Users },
   { key: 'sperringer', navn: 'Sperringer', ikon: Ban },
-  { key: 'priser', navn: 'Priser', ikon: Tag },
+  { key: 'innstillinger', navn: 'Innstillinger', ikon: Settings },
 ];
 const STATUSTEKST: Record<Status, string> = { forespurt: 'Venter', bekreftet: 'Bekreftet', avlyst: 'Fjernet' };
 const to = (t: number) => String(t).padStart(2, '0');
@@ -28,37 +30,14 @@ const kl = (fra: number, til = fra + 1) => `${to(fra)}–${to(til)}`;
 
 export type Api = (metode: string, url: string, body?: unknown, ok?: string) => Promise<boolean>;
 
-export function AdminClient({ innlogget, demo }: { innlogget: boolean; demo: boolean }) {
-  const [inne, setInne] = useState(innlogget);
-  if (!inne) return <Login demo={demo} onInne={() => setInne(true)} />;
-  return <Panel onUt={() => setInne(false)} />;
+export function AdminClient({ bruker, demo }: { bruker: Bruker | null; demo: boolean }) {
+  const [meg, setMeg] = useState(bruker);
+  if (!meg) return <Login demo={demo} onInne={setMeg} />;
+  if (meg.rolle === 'innsyn') return <Innsyn bruker={meg} onUt={() => setMeg(null)} />;
+  return <Panel meg={meg} onUt={() => setMeg(null)} />;
 }
 
-function Login({ demo, onInne }: { demo: boolean; onInne: () => void }) {
-  const [pw, setPw] = useState('');
-  const [feil, setFeil] = useState('');
-  async function logg(e: React.FormEvent) {
-    e.preventDefault();
-    const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ passord: pw }) });
-    if (r.ok) onInne();
-    else setFeil('Feil passord.');
-  }
-  return (
-    <div className="side admin">
-      <div className="oppsett smal">
-        <form className="kort skjema" onSubmit={logg}>
-          <h2><Lock size={18} /> Admin</h2>
-          <label>Passord<input type="password" autoFocus value={pw} onChange={e => setPw(e.target.value)} /></label>
-          {demo && <p className="dempet">Demo: passordet er «demo».</p>}
-          {feil && <div className="banner feil">{feil}</div>}
-          <button className="knapp full">Logg inn</button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function Panel({ onUt }: { onUt: () => void }) {
+function Panel({ meg, onUt }: { meg: Bruker; onUt: () => void }) {
   const [bestillinger, setBestillinger] = useState<Bestilling[] | null>(null);
   const [sperringer, setSperringer] = useState<Sperring[]>([]);
   const [klubbtider, setKlubbtider] = useState<Klubbtid[]>([]);
@@ -93,8 +72,8 @@ function Panel({ onUt }: { onUt: () => void }) {
     return true;
   };
 
-  async function loggUt() {
-    await fetch('/api/admin/login', { method: 'DELETE' });
+  async function loggUtOgLukk() {
+    await loggUt();
     onUt();
   }
 
@@ -124,14 +103,14 @@ function Panel({ onUt }: { onUt: () => void }) {
             </button>
           ))}
         </nav>
-        <button className="adm-ut" onClick={loggUt}><LogOut size={18} /><span>Logg ut</span></button>
+        <button className="adm-ut" onClick={loggUtOgLukk}><LogOut size={18} /><span>Logg ut</span></button>
       </aside>
 
       <main className="adm-innhold">
         <div className="adm-topp">
           <h1>{aktiv.navn}</h1>
-          <span className="dempet">{SESONG.navn}</span>
-          <button className="lenke adm-ut-mobil" onClick={loggUt}><LogOut size={16} /> Logg ut</button>
+          <span className="dempet">{meg.navn}</span>
+          <button className="lenke adm-ut-mobil" onClick={loggUtOgLukk}><LogOut size={16} /> Logg ut</button>
         </div>
         {melding && <div className={`banner ${melding.feil ? 'feil' : ''}`}>{melding.tekst}</div>}
 
@@ -149,7 +128,13 @@ function Panel({ onUt }: { onUt: () => void }) {
             {fane === 'klubber' && <Klubber klubbtider={klubbtider} api={api} />}
             {fane === 'kunder' && <Kunder bestillinger={aktive} alle={bestillinger} api={api} onDag={visDag} />}
             {fane === 'sperringer' && <Sperringer sperringer={sperringer} api={api} />}
-            {fane === 'priser' && <Prisvalg priser={priser} api={api} />}
+            {fane === 'innstillinger' && (
+              <div className="innstillinger">
+                <Brukere meg={meg} api={api} />
+                <section><h2>Priser</h2><Prisvalg priser={priser} api={api} /></section>
+                <MittPassord />
+              </div>
+            )}
           </>
         )}
       </main>

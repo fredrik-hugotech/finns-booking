@@ -35,7 +35,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T
 export const erDemo = () => supabase() === null;
 
 const minne = globalThis as unknown as { __snak?: { bestillinger: Bestilling[]; sperringer: Sperring[] } };
-const demoEkstra = globalThis as unknown as { __snakPriser?: Priser; __snakKlubbtider?: Klubbtid[] };
+const demoEkstra = globalThis as unknown as { __snakPriser?: Priser; __snakKlubbtider?: Klubbtid[]; __snakBrukere?: BrukerMedHash[] };
 const demo = () => (minne.__snak ??= { bestillinger: [], sperringer: [] });
 
 export function nyRef(): string {
@@ -142,4 +142,48 @@ export async function fjernKlubbtid(id: string): Promise<void> {
     return;
   }
   await rpc('snak_fjern_klubbtid', { p_id: id });
+}
+
+// Brukere i backoffice. `passord_hash` forlater aldri serveren.
+export type Rolle = 'admin' | 'innsyn';
+export type Bruker = { id: string; epost: string; navn: string; rolle: Rolle; aktiv: boolean; opprettet?: string; sist_inne?: string | null };
+export type BrukerMedHash = Bruker & { passord_hash: string };
+
+const demoBrukere = () => (demoEkstra.__snakBrukere ??= []);
+
+export async function hentBruker(sok: { id?: string; epost?: string }): Promise<BrukerMedHash | null> {
+  if (erDemo()) {
+    return demoBrukere().find(b => (sok.id && b.id === sok.id) || (sok.epost && b.epost === sok.epost.toLowerCase())) ?? null;
+  }
+  const rader = await rpc<BrukerMedHash[]>('snak_hent_bruker', { p_id: sok.id ?? null, p_epost: sok.epost ?? null });
+  return rader[0] ?? null;
+}
+
+export async function hentBrukere(): Promise<Bruker[]> {
+  if (erDemo()) return demoBrukere().map(({ passord_hash, ...b }) => b);
+  return rpc<Bruker[]>('snak_hent_brukere');
+}
+
+export async function lagreBruker(b: Partial<BrukerMedHash>): Promise<string> {
+  if (erDemo()) {
+    const alle = demoBrukere();
+    const finnes = alle.find(x => x.id === b.id);
+    if (finnes) {
+      Object.assign(finnes, Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined)));
+      return finnes.id;
+    }
+    const ny = { aktiv: true, opprettet: new Date().toISOString(), sist_inne: null, ...b, id: randomUUID() } as BrukerMedHash;
+    alle.push(ny);
+    return ny.id;
+  }
+  return rpc<string>('snak_lagre_bruker', { p_b: b });
+}
+
+export async function markerInne(id: string): Promise<void> {
+  if (erDemo()) {
+    const b = demoBrukere().find(x => x.id === id);
+    if (b) b.sist_inne = new Date().toISOString();
+    return;
+  }
+  await rpc('snak_bruker_inne', { p_id: id });
 }

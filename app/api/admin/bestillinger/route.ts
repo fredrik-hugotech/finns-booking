@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { erAdmin } from '@/lib/admin';
+import { erAdmin } from '@/lib/tilgang';
 import {
   hentBestillinger, hentKlubbtider, hentPriser, hentSperringer, lagreBestillinger, nyRef, oppdaterBestillinger, OpptattFeil, settStatus, type Endringer,
 } from '@/lib/lager';
@@ -19,13 +19,13 @@ async function ledig(dato: string, time: number, bane: Bane, unntatt: string[] =
 }
 
 export async function GET() {
-  if (!erAdmin()) return nekt();
+  if (!(await erAdmin())) return nekt();
   return NextResponse.json({ bestillinger: await hentBestillinger() });
 }
 
 // Endre status ({ ider, status }) eller innhold ({ ider, endringer }).
 export async function PATCH(req: Request) {
-  if (!erAdmin()) return nekt();
+  if (!(await erAdmin())) return nekt();
   const { ider, status, endringer } = await req.json().catch(() => ({}));
   if (!Array.isArray(ider) || ider.length === 0 || !ider.every((i: unknown) => typeof i === 'string')) {
     return NextResponse.json({ feil: 'Ugyldig forespørsel.' }, { status: 400 });
@@ -76,7 +76,7 @@ export async function PATCH(req: Request) {
 
 // Admin legger inn en booking selv (f.eks. etter en telefon). Blir bekreftet med en gang.
 export async function POST(req: Request) {
-  if (!erAdmin()) return nekt();
+  if (!(await erAdmin())) return nekt();
   const b = await req.json().catch(() => ({}));
   const navn = tekst(b.navn, 120);
   const bane: Bane = b.bane === 'halv' ? 'halv' : 'hel';

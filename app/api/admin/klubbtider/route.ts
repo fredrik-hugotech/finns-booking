@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { erAdmin } from '@/lib/admin';
+import { erAdmin } from '@/lib/tilgang';
 import { fjernKlubbtid, hentBestillinger, hentKlubbtider, lagreKlubbtid } from '@/lib/lager';
 import { halvdeler, type Bane, type Bestilling, type Klubbtid } from '@/lib/tilgjengelighet';
 import { FORSTE_TIME, SESONG, SISTE_TIME, STENGTE_DAGER } from '@/lib/config';
@@ -12,7 +12,7 @@ const tekst = (v: unknown, maks: number) => (typeof v === 'string' ? v.trim().sl
 const KLOKKE = /^\d\d:[03]0$/;
 
 export async function GET() {
-  if (!erAdmin()) return nekt();
+  if (!(await erAdmin())) return nekt();
   return NextResponse.json({ klubbtider: await hentKlubbtider() });
 }
 
@@ -41,7 +41,7 @@ function kollisjoner(k: Omit<Klubbtid, 'id'>, andre: Klubbtid[], bestillinger: B
 
 // Ny eller endret klubbtid. Frigitte datoer ligger i `unntak`.
 export async function POST(req: Request) {
-  if (!erAdmin()) return nekt();
+  if (!(await erAdmin())) return nekt();
   const b = await req.json().catch(() => ({}));
   const k = {
     id: typeof b.id === 'string' ? b.id : undefined,
@@ -74,7 +74,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  if (!erAdmin()) return nekt();
+  if (!(await erAdmin())) return nekt();
   const id = new URL(req.url).searchParams.get('id');
   if (!id) return NextResponse.json({ feil: 'Mangler id.' }, { status: 400 });
   await fjernKlubbtid(id);

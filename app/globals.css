@@ -394,3 +394,42 @@ h1 { font-size: 1.5rem; color: var(--gronn); margin-bottom: 2px; }
   .adm-meny button { min-width: 0; }
   .adm-meny button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+
+/* Innlogging og brukere */
+.login-logo { height: 36px; width: auto; justify-self: start; }
+.innstillinger { display: grid; gap: 16px; }
+.innstillinger > section > h2 { margin: 4px 0 8px; }
+.nytt-passord { display: grid; gap: 6px; padding: 12px; margin: 10px 0; border-radius: 8px; background: var(--varsel-lys); color: var(--varsel); font-size: 0.9rem; }
+.nytt-passord code { font-size: 1.25rem; font-weight: 700; letter-spacing: 0.04em; color: var(--tekst); user-select: all; }
+.brukerliste { list-style: none; margin: 8px 0 0; padding: 0; }
+.brukerliste li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 0; border-top: 1px solid var(--linje); }
+.brukerliste li.inaktiv { opacity: 0.55; }
+.brukerliste select { padding: 6px 8px; border: 1px solid var(--linje); border-radius: 6px; background: #fff; }
+.brukerliste .adm-handlinger { margin-top: 0; }
+
+/* Innsyn: hvem som har banen */
+.innsyn { min-height: 100vh; background: var(--flate); }
+.innsyn-topp { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: #fff; border-bottom: 1px solid var(--linje); }
+.innsyn-topp .adm-logo { margin: 0 auto 0 0; }
+.innsyn-topp .lenke { color: var(--dempet); font-size: 0.88rem; }
+.innsyn-innhold { max-width: 900px; margin: 0 auto; padding: 16px 16px 60px; display: grid; gap: 14px; }
+.dag-nav { display: flex; align-items: center; gap: 10px; }
+.dag-nav h1 { font-size: 1.3rem; margin: 0; min-width: 0; flex: 1; text-align: center; }
+.kort.innsyn-dag { padding: 0; overflow: hidden; }
+.innsyn-rad { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 11px 14px; border-top: 1px solid var(--linje); box-shadow: inset 4px 0 0 var(--kf-kant, transparent); }
+.innsyn-rad:first-child { border-top: 0; }
+.innsyn-rad .adm-tid { min-width: 104px; }
+.innsyn-rad strong { flex: 1; min-width: 140px; }
+.innsyn-rad.kunde { box-shadow: inset 4px 0 0 var(--gronn); }
+.innsyn-rad.kunde.forespurt { box-shadow: inset 4px 0 0 var(--varsel); }
+.innsyn-rad.sperret { background: var(--feil-lys); color: var(--feil); }
+.innsyn-rad.ledig { color: var(--dempet); padding-top: 7px; padding-bottom: 7px; font-size: 0.88rem; }
+@media (max-width: 520px) {
+  .innsyn-topp { padding: 10px 12px; gap: 10px; }
+  .innsyn-topp .dempet { display: none; }
+  .dag-nav h1 { font-size: 1.05rem; }
+  .innsyn-rad .adm-tid { min-width: 0; width: 100%; font-size: 0.85rem; }
+  .innsyn-rad.ledig .adm-tid { width: auto; }
+}
+.innsyn-innhold > * { min-width: 0; }
+.innsyn-topp .adm-logo { display: block !important; height: 30px; }

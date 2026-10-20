@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { erAdmin } from '@/lib/admin';
+import { erAdmin } from '@/lib/tilgang';
 import { hentPriser, lagrePriser } from '@/lib/lager';
 import type { Priser } from '@/lib/config';
 
@@ -9,13 +9,13 @@ const nekt = () => NextResponse.json({ feil: 'Ikke innlogget.' }, { status: 401 
 const belop = (v: unknown) => (Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 100000 ? (v as number) : null);
 
 export async function GET() {
-  if (!erAdmin()) return nekt();
+  if (!(await erAdmin())) return nekt();
   return NextResponse.json({ priser: await hentPriser() });
 }
 
 // Nye priser gjelder nye bookinger. Timer som allerede er booket beholder prisen sin.
 export async function PUT(req: Request) {
-  if (!erAdmin()) return nekt();
+  if (!(await erAdmin())) return nekt();
   const b = await req.json().catch(() => ({}));
   const priser: Priser = {
     ukedag: { hel: belop(b?.ukedag?.hel)!, halv: belop(b?.ukedag?.halv)! },

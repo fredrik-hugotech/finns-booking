@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Mail, MessageSquare, Pencil, Phone, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import { FORSTE_TIME, SISTE_TIME, STENGTE_DAGER } from '@/lib/config';
 import {
-  klubbNavn, type Bane, type Bestilling, type Klubbtid, type Sperring,
+  klubbNavn, type Bane, type Bestilling, type Klubbtid, type OffentligKlubbtid, type Sperring,
 } from '@/lib/tilgjengelighet';
 import { dagOgManed, datoer, langDato, leggTilDager, minutter, naIOslo, ukedag } from '@/lib/dato';
 import type { Api } from './AdminClient';
@@ -14,7 +14,8 @@ const KLOKKESLETT = Array.from({ length: (SISTE_TIME + 1 - FORSTE_TIME) * 2 + 1 
   const m = FORSTE_TIME * 60 + i * 30;
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${m % 60 ? '30' : '00'}`;
 });
-const tid = (k: Pick<Klubbtid, 'fra' | 'til'>) => `${k.fra}–${k.til}`;
+export type SynligBestilling = Pick<Bestilling, 'id' | 'dato' | 'time' | 'bane' | 'status' | 'navn' | 'klubb'>;
+export const tid = (k: Pick<Klubbtid, 'fra' | 'til'>) => `${k.fra}–${k.til}`;
 const timerPerUke = (ks: Klubbtid[]) => ks.reduce((s, k) => s + (minutter(k.til) - minutter(k.fra)) / 60 * (k.bane === 'halv' ? 0.5 : 1), 0);
 const tall = (n: number) => n.toLocaleString('nb-NO', { maximumFractionDigits: 1 });
 
@@ -212,7 +213,7 @@ const RAD = 13; // px per halvtime
 
 export function UkeOversikt({ mandag, valgt, onVelg, bestillinger, sperringer, klubbtider }: {
   mandag: string; valgt: string; onVelg: (d: string) => void;
-  bestillinger: Bestilling[]; sperringer: Sperring[]; klubbtider: Klubbtid[];
+  bestillinger: SynligBestilling[]; sperringer: Sperring[]; klubbtider: (OffentligKlubbtid & { kontakt?: string | null })[];
 }) {
   const dager = datoer(mandag, leggTilDager(mandag, 6));
   const start = FORSTE_TIME * 60;

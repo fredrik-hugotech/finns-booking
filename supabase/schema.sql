@@ -238,3 +238,68 @@ begin
 end
 $fn$;
 -- Startdata (Ark 2) genereres fra lib/klubbtider-start.ts.
+
+-- Brukere i backoffice. Admin kan endre alt; innsyn ser bare hvem som har
+-- banen. Passord lagres som scrypt-hash (lages på serveren, se lib/tilgang.ts).
+create table if not exists snak_brukere (
+  id uuid primary key default gen_random_uuid(),
+  epost text not null unique check (epost = lower(epost)),
+  navn text not null,
+  rolle text not null check (rolle in ('admin', 'innsyn')),
+  passord_hash text not null,
+  aktiv boolean not null default true,
+  opprettet timestamptz not null default now(),
+  sist_inne timestamptz
+);
+alter table snak_brukere enable row level security;
+
+-- Én bruker etter id eller e-post (med hash, kun for serveren).
+create or replace function snak_hent_bruker(p_nokkel text, p_id uuid, p_epost text) returns setof snak_brukere
+language plpgsql security definer set search_path = public stable as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  return query select * from snak_brukere where (p_id is not null and id = p_id) or (p_epost is not null and epost = lower(p_epost));
+end
+$fn$;
+
+create or replace function snak_hent_brukere(p_nokkel text)
+returns table (id uuid, epost text, navn text, rolle text, aktiv boolean, opprettet timestamptz, sist_inne timestamptz)
+language plpgsql security definer set search_path = public stable as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  return query select b.id, b.epost, b.navn, b.rolle, b.aktiv, b.opprettet, b.sist_inne from snak_brukere b order by b.aktiv desc, b.navn;
+end
+$fn$;
+
+-- Ny bruker (uten id) eller endring. Passord endres bare når hash er med.
+create or replace function snak_lagre_bruker(p_nokkel text, p_b jsonb) returns uuid
+language plpgsql security definer set search_path = public as $fn$
+declare
+  ny_id uuid;
+begin
+  perform snak_sjekk(p_nokkel);
+  if p_b->>'id' is null then
+    insert into snak_brukere (epost, navn, rolle, passord_hash, aktiv)
+    values (lower(p_b->>'epost'), p_b->>'navn', p_b->>'rolle', p_b->>'passord_hash', coalesce((p_b->>'aktiv')::boolean, true))
+    returning id into ny_id;
+  else
+    update snak_brukere set
+      epost = coalesce(lower(p_b->>'epost'), epost),
+      navn = coalesce(p_b->>'navn', navn),
+      rolle = coalesce(p_b->>'rolle', rolle),
+      aktiv = coalesce((p_b->>'aktiv')::boolean, aktiv),
+      passord_hash = coalesce(p_b->>'passord_hash', passord_hash)
+    where id = (p_b->>'id')::uuid
+    returning id into ny_id;
+  end if;
+  return ny_id;
+end
+$fn$;
+
+create or replace function snak_bruker_inne(p_nokkel text, p_id uuid) returns void
+language plpgsql security definer set search_path = public as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  update snak_brukere set sist_inne = now() where id = p_id;
+end
+$fn$;

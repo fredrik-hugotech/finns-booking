@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server';
-import { erAdmin } from '@/lib/admin';
+import { erAdmin } from '@/lib/tilgang';
 import { hentSperringer, lagreSperring, slettSperring } from '@/lib/lager';
 import { erGyldigDato } from '@/lib/dato';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  if (!erAdmin()) return NextResponse.json({ feil: 'Ikke innlogget.' }, { status: 401 });
+  if (!(await erAdmin())) return NextResponse.json({ feil: 'Ikke innlogget.' }, { status: 401 });
   return NextResponse.json({ sperringer: await hentSperringer() });
 }
 
 export async function POST(req: Request) {
-  if (!erAdmin()) return NextResponse.json({ feil: 'Ikke innlogget.' }, { status: 401 });
+  if (!(await erAdmin())) return NextResponse.json({ feil: 'Ikke innlogget.' }, { status: 401 });
   const b = await req.json().catch(() => ({}));
   const arsak = typeof b.arsak === 'string' ? b.arsak.trim().slice(0, 120) : '';
   if (!erGyldigDato(b.dato) || !Number.isInteger(b.fra_time) || !Number.isInteger(b.til_time) || b.til_time <= b.fra_time || !arsak) {
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  if (!erAdmin()) return NextResponse.json({ feil: 'Ikke innlogget.' }, { status: 401 });
+  if (!(await erAdmin())) return NextResponse.json({ feil: 'Ikke innlogget.' }, { status: 401 });
   const id = new URL(req.url).searchParams.get('id');
   if (!id) return NextResponse.json({ feil: 'Mangler id.' }, { status: 400 });
   await slettSperring(id);
