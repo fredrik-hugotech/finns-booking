@@ -19,7 +19,14 @@ function supabase(): SupabaseClient | null {
   if (klient !== undefined) return klient;
   const url = process.env.SUPABASE_URL;
   const anon = process.env.SUPABASE_ANON_KEY;
-  klient = url && anon && process.env.SNAK_API_NOKKEL ? createClient(url, anon, { auth: { persistSession: false } }) : null;
+  // Aldri hurtigbuffer: Next.js lagrer ellers fetch-svar (også POST) i Vercels
+  // datacache på tvers av deployer, og da ser vi gamle bookinger.
+  klient = url && anon && process.env.SNAK_API_NOKKEL
+    ? createClient(url, anon, {
+      auth: { persistSession: false },
+      global: { fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }) },
+    })
+    : null;
   return klient;
 }
 
