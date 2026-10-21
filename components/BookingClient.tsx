@@ -4,7 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
 import { ARENA, SESONG, STANDARD_PRIS, type Priser } from '@/lib/config';
 import {
-  TIMER, erHelg, halvdeler, nokkel, slot, type Bane, type Belegg,
+  TIMER, erHelg, halvdeler, halvslot, klokke, slot, startAv, varighet, type Bane, type Belegg,
 } from '@/lib/tilgjengelighet';
 import {
   dagOgManed, dagnavn, datoer, kr, langDato, leggTilDager, mandagI, ukedag, ukenummer,
@@ -12,7 +12,8 @@ import {
 import { Retningslinjer } from './Retningslinjer';
 import { PrisKontekst, usePris } from './Priser';
 
-type Valgt = { dato: string; time: number; bane: Bane };
+// Et valg: hel time (minutt 0, 60 min) eller en halvtime (minutt 0/30, 30 min).
+type Valgt = { dato: string; time: number; minutt: number; lengde: number; bane: Bane };
 type Visning = 'enkelt' | 'fast';
 type Na = { dato: string; time: number };
 type Kvittering = { ref: string; antall: number; sum: number; linjer: Valgt[] };
@@ -34,13 +35,21 @@ function lagOkt(): string {
   }
 }
 
-const vKey = (v: { dato: string; time: number }) => nokkel(v.dato, v.time);
+const vKey = (v: Valgt) => `${v.dato}|${String(startAv(v)).padStart(4, '0')}`;
 const sorter = (l: Valgt[]) => [...l].sort((a, b) => vKey(a).localeCompare(vKey(b)));
 const to = (t: number) => String(t).padStart(2, '0');
 const kl = (fra: number, til = fra + 1) => `${to(fra)}–${to(til)}`;
+// «13», «13:30»: hele timer uten minutter, så tidene er korte å lese.
+const kort = (min: number) => (min % 60 ? klokke(min) : to(min / 60));
+const tidKort = (fra: number, til: number) => `${kort(fra)}–${kort(til)}`;
+const lagValg = (dato: string, start: number, lengde: number, bane: Bane): Valgt =>
+  ({ dato, time: Math.floor(start / 60), minutt: start % 60, lengde, bane });
+const overlapper = (a: Valgt, b: Valgt) =>
+  a.dato === b.dato && startAv(a) < startAv(b) + b.lengde && startAv(b) < startAv(a) + a.lengde;
+const totalMin = (l: Valgt[]) => l.reduce((n, v) => n + v.lengde, 0);
 const stor = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-// Sammenhengende timer samme dag og bane blir én blokk (20–21 + 21–22 = 20–22),
+// Sammenhengende tider samme dag og bane blir én blokk (20–21 + 21–21:30 = 20–21:30),
 // og like blokker på samme ukedag blir én linje («Søndager kl. 17–19, 12 ganger»).
 type Linje = { tittel: string; under: string; timer: Valgt[] };
 function oppsummer(linjer: Valgt[]): Linje[] {
@@ -48,19 +57,19 @@ function oppsummer(linjer: Valgt[]): Linje[] {
   for (const v of sorter(linjer)) {
     const forrige = blokker[blokker.length - 1];
     const siste = forrige?.[forrige.length - 1];
-    if (siste && siste.dato === v.dato && siste.bane === v.bane && siste.time + 1 === v.time) forrige.push(v);
+    if (siste && siste.dato === v.dato && siste.bane === v.bane && startAv(siste) + siste.lengde === startAv(v)) forrige.push(v);
     else blokker.push([v]);
   }
   const grupper = new Map<string, Valgt[][]>();
   for (const b of blokker) {
-    const k = `${ukedag(b[0].dato)}|${b[0].time}|${b.length}|${b[0].bane}`;
+    const k = `${ukedag(b[0].dato)}|${startAv(b[0])}|${totalMin(b)}|${b[0].bane}`;
     grupper.set(k, [...(grupper.get(k) ?? []), b]);
   }
   return [...grupper.values()]
     .sort((a, b) => vKey(a[0][0]).localeCompare(vKey(b[0][0])))
     .map(bs => {
       const f = bs[0][0];
-      const tid = kl(f.time, f.time + bs[0].length);
+      const tid = tidKort(startAv(f), startAv(f) + totalMin(bs[0]));
       const bane = f.bane === 'hel' ? 'hel bane' : 'halv bane';
       const timer = bs.flat();
       if (bs.length === 1) return { tittel: `${langDato(f.dato)}, kl. ${tid}`, under: bane, timer };
@@ -89,19 +98,24 @@ function brikke(d: string, iDag: string) {
   return { tekst, dato: `${Number(d.slice(8))}.${Number(d.slice(5, 7))}.` };
 }
 
-// Tidslinje for én dag: ledige timer enkeltvis, opptatte timer slått sammen.
+// Tidslinje for én dag: ledige timer og halvtimer enkeltvis, det som er
+// opptatt slått sammen. Tider i minutter etter midnatt.
 type Rad =
   | { type: 'ledig'; time: number }
+  | { type: 'halv'; start: number }
   | { type: 'opptatt'; fra: number; til: number; tekst: string };
+
+function leggOpptatt(rader: Rad[], fra: number, til: number, tekst: string) {
+  const forrige = rader[rader.length - 1];
+  if (forrige?.type === 'opptatt' && forrige.til === fra && forrige.tekst === tekst) forrige.til = til;
+  else rader.push({ type: 'opptatt', fra, til, tekst });
+}
 
 function byggRader(erLedig: (t: number) => boolean, grunn: (t: number) => string): Rad[] {
   const rader: Rad[] = [];
   for (const t of TIMER) {
-    if (erLedig(t)) { rader.push({ type: 'ledig', time: t }); continue; }
-    const forrige = rader[rader.length - 1];
-    const tekst = grunn(t);
-    if (forrige?.type === 'opptatt' && forrige.til === t && forrige.tekst === tekst) forrige.til = t + 1;
-    else rader.push({ type: 'opptatt', fra: t, til: t + 1, tekst });
+    if (erLedig(t)) rader.push({ type: 'ledig', time: t });
+    else leggOpptatt(rader, t * 60, t * 60 + 60, grunn(t));
   }
   return rader;
 }
@@ -170,15 +184,17 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
     try {
       const r = await fetch('/api/hold', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ okt, linjer: linjer.map(({ dato, time, bane }) => ({ dato, time, bane })) }),
+        body: JSON.stringify({ okt, linjer: linjer.map(({ dato, time, minutt, lengde, bane }) => ({ dato, time, minutt, lengde, bane })) }),
       });
       const j = await r.json();
       if (!r.ok || nr !== holdNr.current) return;
-      const avvist: { dato: string; time: number }[] = j.avvist ?? [];
-      setHoldtTil(linjer.length - avvist.length > 0 ? Date.now() + j.minutter * 60_000 : null);
-      if (avvist.length) {
-        setValgt(p => p.filter(v => !avvist.some(a => a.dato === v.dato && a.time === v.time)));
-        setTatt(`Noen andre rakk å velge ${avvist.map(a => `${dagOgManed(a.dato, true)} ${kl(a.time)}`).join(', ')} akkurat nå.`);
+      const avvist: { dato: string; start: number }[] = j.avvist ?? [];
+      const rammet = (v: Valgt) => avvist.some(a => a.dato === v.dato && startAv(v) <= a.start && a.start < startAv(v) + v.lengde);
+      const tapt = linjer.filter(rammet);
+      setHoldtTil(linjer.length - tapt.length > 0 ? Date.now() + j.minutter * 60_000 : null);
+      if (tapt.length) {
+        setValgt(p => p.filter(v => !rammet(v)));
+        setTatt(`Noen andre rakk å velge ${tapt.map(v => `${dagOgManed(v.dato, true)} ${tidKort(startAv(v), startAv(v) + v.lengde)}`).join(', ')} akkurat nå.`);
         last();
       }
     } catch {
@@ -206,7 +222,10 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
   const iDag = na?.dato ?? SESONG.fra;
   // Antall ledige halvdeler: 2 = hel bane ledig, 1 = bare halv bane.
   const kapasitet = (d: string, t: number) => (belegg && na ? slot(d, t, belegg, na).ledigeHalvdeler : 0);
-  const antallLedige = (d: string) => TIMER.filter(t => kapasitet(d, t) > 0).length;
+  const halvKap = (d: string, start: number) => (belegg && na ? halvslot(d, start, belegg, na).ledigeHalvdeler : 0);
+  const antallLedige = (d: string) => TIMER.filter(t => halvKap(d, t * 60) > 0 || halvKap(d, t * 60 + 30) > 0).length;
+  // Timer der kunden har valgt å se halvtimene hver for seg.
+  const [delt, setDelt] = useState<Set<string>>(new Set());
 
   // Faste tider: for hver ukedag og time, hvilke gjenværende uker som har hel/halv bane ledig.
   const faste = useMemo(() => {
@@ -224,23 +243,27 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
     return ut;
   }, [belegg, na]);
 
-  const sum = valgt.reduce((s, v) => s + prisFor(v.bane, v.dato), 0);
-  const valgtPaa = (d: string, t: number) => valgt.find(v => v.dato === d && v.time === t);
+  const sum = valgt.reduce((s, v) => s + prisFor(v.bane, v.dato, v.lengde), 0);
+  // Hel time valgt på dagen, og valg som starter på en bestemt halvtime.
+  const valgtPaa = (d: string, t: number) => valgt.find(v => v.dato === d && v.time === t && v.minutt === 0 && v.lengde === 60);
+  const valgtHalv = (d: string, start: number) => valgt.find(v => v.dato === d && startAv(v) === start && v.lengde === 30);
 
-  // Samme knapp igjen fjerner timen, den andre banestørrelsen bytter.
-  function velg(d: string, t: number, bane: Bane) {
+  // Samme knapp igjen fjerner tida, den andre banestørrelsen bytter.
+  // Et nytt valg erstatter det som overlapper samme tid.
+  function velg(d: string, start: number, lengde: number, bane: Bane) {
     setValgt(prev => {
-      const finnes = prev.find(v => v.dato === d && v.time === t);
-      const uten = prev.filter(v => v !== finnes);
-      return finnes?.bane === bane ? uten : sorter([...uten, { dato: d, time: t, bane }]);
+      const ny = lagValg(d, start, lengde, bane);
+      const lik = prev.find(v => v.dato === d && startAv(v) === start && v.lengde === lengde);
+      const uten = prev.filter(v => !overlapper(v, ny));
+      return lik?.bane === bane ? uten : sorter([...uten, ny]);
     });
   }
 
   function velgFast(ds: string[], t: number, bane: Bane) {
     setValgt(prev => {
-      const alle = ds.every(d => prev.some(v => v.dato === d && v.time === t && v.bane === bane));
+      const alle = ds.every(d => prev.some(v => v.dato === d && v.time === t && v.lengde === 60 && v.bane === bane));
       const uten = prev.filter(v => !(v.time === t && ukedag(v.dato) === ukedag(ds[0])));
-      return alle ? uten : sorter([...uten, ...ds.map(d => ({ dato: d, time: t, bane }))]);
+      return alle ? uten : sorter([...uten, ...ds.map(d => lagValg(d, t * 60, 60, bane))]);
     });
   }
 
@@ -288,8 +311,40 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
   };
 
   const fastDato = ALLE_DATOER.find(x => ukedag(x) === fastDag)!;
+
+  // Enkelttimer: hel time når begge halvtimene er ledige; ellers den ledige
+  // halvtimen alene. Kunden kan også dele en ledig time i to halvtimer.
+  const halvGrunn = (d: string, start: number) => {
+    if (!belegg || !na) return '';
+    const s = halvslot(d, start, belegg, na);
+    return s.tilstand === 'stengt' ? s.tekst ?? 'Stengt' : '';
+  };
+  function dagsRader(d: string): Rad[] {
+    const rader: Rad[] = [];
+    for (const t of TIMER) {
+      const [a, b] = [t * 60, t * 60 + 30];
+      const harHalv = valgtHalv(d, a) || valgtHalv(d, b);
+      const hel = (halvKap(d, a) > 0 && halvKap(d, b) > 0) || !!valgtPaa(d, t);
+      if (hel && !harHalv && !delt.has(`${d}|${t}`)) { rader.push({ type: 'ledig', time: t }); continue; }
+      for (const s of [a, b]) {
+        if (halvKap(d, s) > 0 || valgtHalv(d, s)) rader.push({ type: 'halv', start: s });
+        else leggOpptatt(rader, s, s + 30, halvGrunn(d, s));
+      }
+    }
+    return rader;
+  }
+  function delTime(d: string, t: number, del: boolean) {
+    setDelt(prev => {
+      const ny = new Set(prev);
+      if (del) ny.add(`${d}|${t}`); else ny.delete(`${d}|${t}`);
+      return ny;
+    });
+    // Valget for timen gjelder ikke lenger når den deles eller slås sammen.
+    setValgt(prev => prev.filter(v => !(v.dato === d && v.time === t)));
+  }
+
   const rader = visning === 'enkelt'
-    ? byggRader(t => kapasitet(dag, t) > 0 || !!valgtPaa(dag, t), grunn(dag))
+    ? dagsRader(dag)
     : byggRader(t => faste.has(`${fastDag}|${t}`), () => '');
 
   return (
@@ -355,9 +410,20 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
               if (r.type === 'opptatt') {
                 return (
                   <div key={`o${r.fra}`} className="tl-opptatt">
-                    <span className="tl-tid">{kl(r.fra, r.til)}</span>
+                    <span className="tl-tid">{tidKort(r.fra, r.til)}</span>
                     {r.tekst && <span>{r.tekst}</span>}
                   </div>
+                );
+              }
+              if (r.type === 'halv') {
+                const s = r.start;
+                const t = Math.floor(s / 60);
+                const iDelt = halvKap(dag, t * 60) > 0 && halvKap(dag, t * 60 + 30) > 0 && s % 60 === 0;
+                return (
+                  <Tidsrad key={`h${s}`} tid={tidKort(s, s + 30)} under={iDelt ? undefined : '30 min'} dato={dag} lengde={30}
+                    kanHel={halvKap(dag, s) === 2 || valgtHalv(dag, s)?.bane === 'hel'}
+                    valgt={valgtHalv(dag, s)?.bane} onVelg={b => velg(dag, s, 30, b)}
+                    lenke={iDelt ? { tekst: 'Hele timen', onClick: () => delTime(dag, t, false) } : undefined} />
                 );
               }
               const t = r.time;
@@ -383,7 +449,7 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
                             <div key={x} className="avvik-rad">
                               <span>{dagOgManed(x, true)} {stengt ? 'stengt' : 'opptatt'}</span>
                               {a && !stengt ? (
-                                <button className={pa ? 'pa' : ''} aria-pressed={pa} onClick={() => velg(x, a.time, a.bane)}>
+                                <button className={pa ? 'pa' : ''} aria-pressed={pa} onClick={() => velg(x, a.time * 60, 60, a.bane)}>
                                   {pa && <Check size={13} />} {a.time === t ? 'Halv bane' : kl(a.time)}{a.time !== t && a.bane === 'halv' ? ' halv' : ''} <small>{kr(prisFor(a.bane, x))}</small>
                                 </button>
                               ) : <span className="dempet-tekst">{stengt ? '' : 'ingen annen tid'}</span>}
@@ -396,8 +462,9 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
                 );
               }
               return (
-                <Tidsrad key={t} tid={kl(t)} dato={dag} kanHel={kapasitet(dag, t) === 2 || valgtPaa(dag, t)?.bane === 'hel'}
-                  valgt={valgtPaa(dag, t)?.bane} onVelg={b => velg(dag, t, b)} />
+                <Tidsrad key={t} tid={kl(t)} dato={dag} lengde={60} kanHel={kapasitet(dag, t) === 2 || valgtPaa(dag, t)?.bane === 'hel'}
+                  valgt={valgtPaa(dag, t)?.bane} onVelg={b => velg(dag, t * 60, 60, b)}
+                  lenke={{ tekst: 'Del i halvtimer', onClick: () => delTime(dag, t, true) }} />
               );
             })}
           </div>
@@ -408,7 +475,7 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
         <div className="bunn">
           <div className="bunn-innhold">
             <div>
-              <strong>{valgt.length} {valgt.length === 1 ? 'time' : 'timer'}</strong>
+              <strong>{varighet(totalMin(valgt))}</strong>
               <span>{kr(sum)}{minutterIgjen ? ` · holdt av til deg i ${minutterIgjen} min` : ''}</span>
             </div>
             <button className="lenke" onClick={() => setValgt([])}>Tøm</button>
@@ -420,25 +487,32 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
   );
 }
 
-// Én ledig time: tid til venstre, valg av banestørrelse med pris til høyre.
-function Tidsrad({ tid, under, dato, kanHel, valgt, onVelg }: {
+// Én ledig time eller halvtime: tid til venstre, valg av banestørrelse med
+// pris til høyre. `lenke` deler en time i halvtimer eller slår dem sammen.
+function Tidsrad({ tid, under, dato, lengde = 60, kanHel, valgt, onVelg, lenke }: {
   tid: string;
   under?: string;
   dato: string;
+  lengde?: number;
   kanHel: boolean;
   valgt?: Bane;
   onVelg: (b: Bane) => void;
+  lenke?: { tekst: string; onClick: () => void };
 }) {
   const prisFor = usePris();
   return (
     <div className={`tl-ledig ${valgt ? 'valgt' : ''}`}>
-      <span className="tl-tid">{tid}{under && <small>{under}</small>}</span>
+      <span className="tl-tid">
+        {tid}
+        {under && <small>{under}</small>}
+        {lenke && <button type="button" className="tl-del" onClick={lenke.onClick}>{lenke.tekst}</button>}
+      </span>
       <span className="tl-valg">
         {(['hel', 'halv'] as Bane[]).map(b => (b === 'hel' && !kanHel) ? null : (
           <button key={b} aria-pressed={valgt === b} className={valgt === b ? 'pa' : ''} onClick={() => onVelg(b)}>
             {valgt === b && <Check size={15} />}
             <span>{b === 'hel' ? 'Hel' : 'Halv'}</span>
-            <small>{kr(prisFor(b, dato))}</small>
+            <small>{kr(prisFor(b, dato, lengde))}</small>
           </button>
         ))}
       </span>
@@ -482,7 +556,7 @@ function Skjema({ valgt, sum, okt, minutterIgjen, onTilbake, onFjern, onFerdig, 
   const [godtatt, setGodtatt] = useState(false);
   const [sender, setSender] = useState(false);
   const [feil, setFeil] = useState<{ tekst: string; opptatt?: string[] } | null>(null);
-  const serie = new Set(valgt.map(v => `${v.time}|${v.bane}`)).size < valgt.length;
+  const serie = new Set(valgt.map(v => `${startAv(v)}|${v.lengde}|${v.bane}`)).size < valgt.length;
 
   useEffect(() => { if (valgt.length === 0) onTilbake(); }, [valgt.length]);
 
@@ -529,12 +603,12 @@ function Skjema({ valgt, sum, okt, minutterIgjen, onTilbake, onFjern, onFerdig, 
               <strong>{l.tittel}</strong>
               <span>{l.under}</span>
             </div>
-            <span className="pris">{kr(l.timer.reduce((s, v) => s + prisFor(v.bane, v.dato), 0))}</span>
+            <span className="pris">{kr(l.timer.reduce((s, v) => s + prisFor(v.bane, v.dato, v.lengde), 0))}</span>
             <button className="fjern" aria-label="Fjern" onClick={() => onFjern(l.timer)}><X size={16} /></button>
           </li>
         ))}
       </ul>
-      <p className="total"><span>Totalt, {valgt.length} {valgt.length === 1 ? 'time' : 'timer'}</span><strong>{kr(sum)}</strong></p>
+      <p className="total"><span>Totalt, {varighet(totalMin(valgt))}</span><strong>{kr(sum)}</strong></p>
 
       <form className="skjema" onSubmit={send}>
         <h2 className="seksjon">Kontaktinfo</h2>
@@ -586,7 +660,7 @@ function Bekreftelse({ k, onNy }: { k: Kvittering; onNy: () => void }) {
             </li>
           ))}
         </ul>
-        <p className="total"><span>Totalt, {k.antall} {k.antall === 1 ? 'time' : 'timer'}</span><strong>{kr(k.sum)}</strong></p>
+        <p className="total"><span>Totalt, {varighet(totalMin(k.linjer))}</span><strong>{kr(k.sum)}</strong></p>
 
         <div className="vipps">
           {/* eslint-disable-next-line @next/next/no-img-element */}

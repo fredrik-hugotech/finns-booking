@@ -13,7 +13,7 @@ export async function GET() {
   return NextResponse.json({
     bestillinger: bestillinger
       .filter(b => b.status !== 'avlyst')
-      .map(({ id, dato, time, bane, status, navn, klubb, telefon, epost }) => ({ id, dato, time, bane, status, navn, klubb, telefon, epost })),
+      .map(({ id, dato, time, minutt, lengde, bane, status, navn, klubb, telefon, epost }) => ({ id, dato, time, minutt, lengde, bane, status, navn, klubb, telefon, epost })),
     klubbtider,
     sperringer,
   });

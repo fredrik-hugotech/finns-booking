@@ -430,3 +430,148 @@ begin
     returning *;
 end
 $fn$;
+
+-- ------------------------------------------------------------------
+-- Halvtimer. En booking starter på hel eller halv time (`minutt` 0/30)
+-- og varer 30 eller 60 minutter (`lengde`). Kapasitet sjekkes per
+-- halvtime, og holdte timer lagres per halvtime i snak_holdt_halv.
+-- (snak_holdt, snak_hold og snak_hent_holdt over er erstattet av dette.)
+-- ------------------------------------------------------------------
+alter table bestillinger add column if not exists minutt smallint not null default 0;
+alter table bestillinger add column if not exists lengde smallint not null default 60;
+alter table bestillinger add constraint bestillinger_minutt_sjekk check (minutt in (0, 30));
+alter table bestillinger add constraint bestillinger_lengde_sjekk check (lengde in (30, 60));
+
+create table if not exists snak_holdt_halv (
+  okt     text not null,
+  dato    date not null,
+  start   smallint not null,          -- minutter etter midnatt, delelig med 30
+  bane    text not null check (bane in ('hel', 'halv')),
+  utloper timestamptz not null,
+  primary key (okt, dato, start)
+);
+alter table snak_holdt_halv enable row level security;
+create index if not exists snak_holdt_halv_tid on snak_holdt_halv (dato, start);
+
+create or replace function sjekk_kapasitet() returns trigger
+language plpgsql as $$
+declare
+  brukt integer;
+  ny integer := case when new.bane = 'hel' then 2 else 1 end;
+  s0 integer := new.time * 60 + new.minutt;
+  s integer;
+begin
+  if new.status = 'avlyst' then
+    return new;
+  end if;
+  s := s0;
+  while s < s0 + new.lengde loop
+    perform pg_advisory_xact_lock(hashtext(new.dato::text || ':' || s::text));
+    select coalesce(sum(case when b.bane = 'hel' then 2 else 1 end), 0) into brukt
+      from bestillinger b
+     where b.dato = new.dato and b.status <> 'avlyst' and b.id <> new.id
+       and b.time * 60 + b.minutt <= s and b.time * 60 + b.minutt + b.lengde > s;
+    brukt := brukt + coalesce((select sum(case when h.bane = 'hel' then 2 else 1 end) from snak_holdt_halv h
+                               where h.dato = new.dato and h.start = s and h.utloper > now()), 0);
+    if brukt + ny > 2 then
+      raise exception 'OPPTATT %', new.dato || ' ' || s;
+    end if;
+    s := s + 30;
+  end loop;
+  return new;
+end $$;
+create trigger bestillinger_kapasitet_lengde
+  before update of minutt, lengde on bestillinger
+  for each row execute function sjekk_kapasitet();
+
+create or replace function snak_hent_holdt_halv(p_nokkel text, p_okt text)
+returns table (h_dato date, h_start smallint, h_bane text)
+language plpgsql security definer set search_path = public stable as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  return query select h.dato, h.start, h.bane from snak_holdt_halv h
+    where h.utloper > now() and (p_okt is null or h.okt <> p_okt);
+end
+$fn$;
+
+-- Hold av halvtimer for en økt (erstatter det økta holdt før). `plass` er
+-- ledige halvdeler etter klubbtider og sperringer. Svarer med halvtimene
+-- som ikke fikk plass.
+create or replace function snak_hold_halv(p_nokkel text, p_okt text, p_linjer jsonb, p_minutter integer)
+returns table (avvist_dato date, avvist_start smallint)
+language plpgsql security definer set search_path = public as $fn$
+declare
+  r record;
+  brukt integer;
+begin
+  perform snak_sjekk(p_nokkel);
+  update snak_holdt_halv set utloper = now() - interval '1 second' where okt = p_okt;
+  for r in select * from jsonb_to_recordset(p_linjer) as x(dato date, start smallint, bane text, plass integer) order by 1, 2 loop
+    perform pg_advisory_xact_lock(hashtext(r.dato::text || ':' || r.start::text));
+    select coalesce(sum(case when b.bane = 'hel' then 2 else 1 end), 0) into brukt
+      from bestillinger b
+     where b.dato = r.dato and b.status <> 'avlyst'
+       and b.time * 60 + b.minutt <= r.start and b.time * 60 + b.minutt + b.lengde > r.start;
+    brukt := brukt + coalesce((select sum(case when h.bane = 'hel' then 2 else 1 end) from snak_holdt_halv h
+                               where h.dato = r.dato and h.start = r.start and h.okt <> p_okt and h.utloper > now()), 0);
+    if brukt + (case when r.bane = 'hel' then 2 else 1 end) > r.plass then
+      avvist_dato := r.dato;
+      avvist_start := r.start;
+      return next;
+    else
+      insert into snak_holdt_halv (okt, dato, start, bane, utloper)
+      values (p_okt, r.dato, r.start, r.bane, now() + make_interval(mins => p_minutter))
+      on conflict on constraint snak_holdt_halv_pkey do update set bane = excluded.bane, utloper = excluded.utloper;
+    end if;
+  end loop;
+end
+$fn$;
+
+create or replace function snak_bestill(p_nokkel text, p_okt text, p_linjer jsonb) returns setof bestillinger
+language plpgsql security definer set search_path = public as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  if p_okt is not null then
+    update snak_holdt_halv set utloper = now() - interval '1 second' where okt = p_okt;
+  end if;
+  return query
+    insert into bestillinger (ref, dato, time, minutt, lengde, bane, navn, telefon, epost, klubb, kommentar, pris, serie)
+    select ref, dato, time, coalesce(minutt, 0), coalesce(lengde, 60), bane, navn, telefon, epost, klubb, kommentar, pris, serie
+      from jsonb_to_recordset(p_linjer) as x(ref text, dato date, time smallint, minutt smallint, lengde smallint, bane text, navn text, telefon text, epost text, klubb text, kommentar text, pris integer, serie text)
+    returning *;
+end
+$fn$;
+
+create or replace function snak_lagre_bestillinger(p_nokkel text, p_linjer jsonb) returns setof bestillinger
+language plpgsql security definer set search_path = public as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  return query
+    insert into bestillinger (ref, dato, time, minutt, lengde, bane, navn, telefon, epost, klubb, kommentar, pris, serie)
+    select ref, dato, time, coalesce(minutt, 0), coalesce(lengde, 60), bane, navn, telefon, epost, klubb, kommentar, pris, serie
+      from jsonb_to_recordset(p_linjer) as x(ref text, dato date, time smallint, minutt smallint, lengde smallint, bane text, navn text, telefon text, epost text, klubb text, kommentar text, pris integer, serie text)
+    returning *;
+end
+$fn$;
+
+create or replace function snak_oppdater_bestillinger(p_nokkel text, p_ider uuid[], p_endringer jsonb) returns setof bestillinger
+language plpgsql security definer set search_path = public as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  return query
+    update bestillinger set
+      dato      = coalesce((p_endringer->>'dato')::date, dato),
+      time      = coalesce((p_endringer->>'time')::smallint, time),
+      minutt    = coalesce((p_endringer->>'minutt')::smallint, minutt),
+      lengde    = coalesce((p_endringer->>'lengde')::smallint, lengde),
+      bane      = coalesce(p_endringer->>'bane', bane),
+      pris      = coalesce((p_endringer->>'pris')::integer, pris),
+      navn      = coalesce(p_endringer->>'navn', navn),
+      telefon   = coalesce(p_endringer->>'telefon', telefon),
+      epost     = coalesce(p_endringer->>'epost', epost),
+      klubb     = case when p_endringer ? 'klubb' then nullif(p_endringer->>'klubb', '') else klubb end,
+      kommentar = case when p_endringer ? 'kommentar' then nullif(p_endringer->>'kommentar', '') else kommentar end
+    where id = any(p_ider)
+    returning *;
+end
+$fn$;

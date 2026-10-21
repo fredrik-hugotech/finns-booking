@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Mail, MessageSquare, Pencil, Phone, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import { FORSTE_TIME, SISTE_TIME, STENGTE_DAGER } from '@/lib/config';
 import {
-  klubbNavn, type Bane, type Bestilling, type Klubbtid, type OffentligKlubbtid, type Sperring,
+  klubbNavn, lengdeAv, startAv, tidFor, type Bane, type Bestilling, type Klubbtid, type OffentligKlubbtid, type Sperring,
 } from '@/lib/tilgjengelighet';
 import { dagOgManed, datoer, langDato, leggTilDager, minutter, naIOslo, ukedag } from '@/lib/dato';
 import type { Api } from './AdminClient';
@@ -14,7 +14,7 @@ const KLOKKESLETT = Array.from({ length: (SISTE_TIME + 1 - FORSTE_TIME) * 2 + 1 
   const m = FORSTE_TIME * 60 + i * 30;
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${m % 60 ? '30' : '00'}`;
 });
-export type SynligBestilling = Pick<Bestilling, 'id' | 'dato' | 'time' | 'bane' | 'status' | 'navn' | 'klubb'>;
+export type SynligBestilling = Pick<Bestilling, 'id' | 'dato' | 'time' | 'minutt' | 'lengde' | 'bane' | 'status' | 'navn' | 'klubb'>;
 export const tid = (k: Pick<Klubbtid, 'fra' | 'til'>) => `${k.fra}–${k.til}`;
 const timerPerUke = (ks: Klubbtid[]) => ks.reduce((s, k) => s + (minutter(k.til) - minutter(k.fra)) / 60 * (k.bane === 'halv' ? 0.5 : 1), 0);
 const tall = (n: number) => n.toLocaleString('nb-NO', { maximumFractionDigits: 1 });
@@ -238,10 +238,10 @@ export function UkeOversikt({ mandag, valgt, onVelg, bestillinger, sperringer, k
     for (const k of klubbtider.filter(k => k.dag === ukedag(d) && !k.unntak.includes(d)).sort((a, b) => a.fra.localeCompare(b.fra))) {
       plasser({ fra: minutter(k.fra), til: minutter(k.til), tekst: k.lag ?? k.klubb, tittel: `${tid(k)} ${klubbNavn(k)}${k.kontakt ? ` (${k.kontakt})` : ''}`, klasse: `farge-${klubbFarge(k.klubb)}` }, k.bane);
     }
-    for (const b of bestillinger.filter(b => b.dato === d).sort((a, b) => a.time - b.time)) {
+    for (const b of bestillinger.filter(b => b.dato === d).sort((a, b) => startAv(a) - startAv(b))) {
       plasser({
-        fra: b.time * 60, til: b.time * 60 + 60, tekst: b.klubb ? `${b.navn} · ${b.klubb}` : b.navn,
-        tittel: `${String(b.time).padStart(2, '0')}–${String(b.time + 1).padStart(2, '0')} ${b.navn}${b.klubb ? ` (${b.klubb})` : ''}${b.status === 'forespurt' ? ' – venter' : ''}`,
+        fra: startAv(b), til: startAv(b) + lengdeAv(b), tekst: b.klubb ? `${b.navn} · ${b.klubb}` : b.navn,
+        tittel: `${tidFor(b)} ${b.navn}${b.klubb ? ` (${b.klubb})` : ''}${b.status === 'forespurt' ? ' – venter' : ''}`,
         klasse: `kunde ${b.status}`,
       }, b.bane);
     }

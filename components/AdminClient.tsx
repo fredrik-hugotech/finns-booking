@@ -6,13 +6,13 @@ import {
 } from 'lucide-react';
 import { SESONG, STANDARD_PRIS, STENGTE_DAGER, type Priser } from '@/lib/config';
 import {
-  TIMER, byggBelegg, klubbHalvdeler, klubbtiderFor, slot, type Bane, type Bestilling, type Klubbtid, type Sperring, type Status,
+  HALVTIMER, TIMER, byggBelegg, halvslot, klokke, klubbHalvdeler, klubbtiderFor, slot, startAv, tidFor, type Bane, type Bestilling, type Klubbtid, type Sperring, type Status,
 } from '@/lib/tilgjengelighet';
 import { PrisKontekst, usePris } from './Priser';
 import { Klubber, Klubbrad, UkeOversikt, klubbFarge } from './AdminKlubber';
 import { Brukere, Innsyn, Logg, Login, MittPassord, loggUt } from './Backoffice';
 import type { Bruker } from '@/lib/lager';
-import { dagOgManed, datoer, kr, langDato, leggTilDager, mandagI, minutter, naIOslo, tidsrom, ukedag, ukenummer } from '@/lib/dato';
+import { dagOgManed, datoer, kr, langDato, leggTilDager, mandagI, minutter, naIOslo, ukedag, ukenummer } from '@/lib/dato';
 
 type Fane = 'kalender' | 'foresporsler' | 'bookinger' | 'klubber' | 'kunder' | 'sperringer' | 'logg' | 'innstillinger';
 const FANER: { key: Fane; navn: string; ikon: typeof Inbox }[] = [
@@ -154,7 +154,7 @@ function grupperRef(linjer: Bestilling[]): Bestilling[][] {
 // Kontaktknapper med ferdig utfylt e-post og SMS om bestillingen.
 function Kontakt({ b, alle }: { b: Bestilling; alle: Bestilling[] }) {
   const linjer = alle.filter(x => x.ref === b.ref && x.status !== 'avlyst');
-  const liste = linjer.map(l => `${langDato(l.dato)} ${tidsrom(l.time)}, ${l.bane === 'hel' ? 'hel' : 'halv'} bane`).join('\n');
+  const liste = linjer.map(l => `${langDato(l.dato)} ${tidFor(l)}, ${l.bane === 'hel' ? 'hel' : 'halv'} bane`).join('\n');
   const sum = linjer.reduce((s, l) => s + l.pris, 0);
   const emne = `Booking ${b.ref} – Sparebanken Norge Arena`;
   const tekst = `Hei ${b.navn.split(' ')[0]},\n\nTakk for bookingen hos Finns.Fairway på Sparebanken Norge Arena:\n\n${liste}\n\nTotalt ${kr(sum)}. Betal med Vipps og merk betalingen med ${b.ref}.\n\nHilsen Finns.Fairway`;
@@ -174,7 +174,7 @@ function Bookingrad({ b, alle, api, visDato }: { b: Bestilling; alle: Bestilling
   return (
     <div className={`adm-rad ${b.status}`}>
       <div className="adm-rad-hode">
-        <span className="adm-tid">{visDato ? `${dagOgManed(b.dato, true)} ` : ''}{tidsrom(b.time)}</span>
+        <span className="adm-tid">{visDato ? `${dagOgManed(b.dato, true)} ` : ''}{tidFor(b)}</span>
         <span className="merkelapp">{b.bane === 'hel' ? 'Hel' : 'Halv'}</span>
         <span className="adm-navn">
           <strong>{b.navn}</strong>{b.klubb && <span className="dempet">{b.klubb}</span>}
@@ -191,7 +191,7 @@ function Bookingrad({ b, alle, api, visDato }: { b: Bestilling; alle: Bestilling
         )}
         <button className="liten-knapp" onClick={() => setRediger(v => !v)}><Pencil size={14} /> {rediger ? 'Lukk' : 'Rediger'}</button>
         <button className="liten-knapp fare" onClick={() => {
-          if (window.confirm(`Fjerne ${tidsrom(b.time)} ${langDato(b.dato)} for ${b.navn}?`)) {
+          if (window.confirm(`Fjerne ${tidFor(b)} ${langDato(b.dato)} for ${b.navn}?`)) {
             api('PATCH', '/api/admin/bestillinger', { ider: [b.id], status: 'avlyst' }, 'Fjernet.');
           }
         }}><Trash2 size={14} /> Fjern</button>
@@ -205,7 +205,7 @@ function Redigering({ b, alle, api, onFerdig }: { b: Bestilling; alle: Bestillin
   const prisFor = usePris();
   const andre = alle.filter(x => x.ref === b.ref && x.status !== 'avlyst');
   const [f, setF] = useState({
-    dato: b.dato, time: b.time, bane: b.bane as Bane,
+    dato: b.dato, start: startAv(b), lengde: b.lengde ?? 60, bane: b.bane as Bane,
     navn: b.navn, telefon: b.telefon, epost: b.epost, klubb: b.klubb ?? '', kommentar: b.kommentar ?? '',
   });
   const [heleBestillingen, setHele] = useState(true);
@@ -215,8 +215,10 @@ function Redigering({ b, alle, api, onFerdig }: { b: Bestilling; alle: Bestillin
     e.preventDefault();
     setLagrer(true);
     let ok = true;
-    if (f.dato !== b.dato || f.time !== b.time || f.bane !== b.bane) {
-      ok = await api('PATCH', '/api/admin/bestillinger', { ider: [b.id], endringer: { dato: f.dato, time: f.time, bane: f.bane } });
+    if (f.dato !== b.dato || f.start !== startAv(b) || f.lengde !== (b.lengde ?? 60) || f.bane !== b.bane) {
+      ok = await api('PATCH', '/api/admin/bestillinger', {
+        ider: [b.id], endringer: { dato: f.dato, time: Math.floor(f.start / 60), minutt: f.start % 60, lengde: f.lengde, bane: f.bane },
+      });
     }
     const kontakt = { navn: f.navn, telefon: f.telefon, epost: f.epost, klubb: f.klubb, kommentar: f.kommentar };
     const endret = (Object.keys(kontakt) as (keyof typeof kontakt)[]).some(k => (b[k] ?? '') !== kontakt[k]);
@@ -235,9 +237,10 @@ function Redigering({ b, alle, api, onFerdig }: { b: Bestilling; alle: Bestillin
     <form className="adm-skjema" onSubmit={lagre}>
       <div className="adm-felter">
         <label>Dato<input type="date" min={SESONG.fra} max={SESONG.til} value={f.dato} onChange={e => setF({ ...f, dato: e.target.value })} /></label>
-        <label>Tid<select value={f.time} onChange={e => setF({ ...f, time: Number(e.target.value) })}>{TIMER.map(t => <option key={t} value={t}>{kl(t)}</option>)}</select></label>
+        <label>Fra<select value={f.start} onChange={e => setF({ ...f, start: Number(e.target.value) })}>{HALVTIMER.map(s => <option key={s} value={s}>{klokke(s)}</option>)}</select></label>
+        <label>Lengde<select value={f.lengde} onChange={e => setF({ ...f, lengde: Number(e.target.value) })}><option value={60}>1 time</option><option value={30}>30 min</option></select></label>
         <label>Bane<select value={f.bane} onChange={e => setF({ ...f, bane: e.target.value as Bane })}><option value="hel">Hel</option><option value="halv">Halv</option></select></label>
-        <label>Pris<input disabled value={kr(prisFor(f.bane, f.dato))} /></label>
+        <label>Pris<input disabled value={kr(prisFor(f.bane, f.dato, f.lengde))} /></label>
       </div>
       <div className="adm-felter">
         <label>Navn<input {...felt('navn')} /></label>
@@ -257,12 +260,15 @@ function Redigering({ b, alle, api, onFerdig }: { b: Bestilling; alle: Bestillin
   );
 }
 
-function NyBooking({ dato, time, kanHel, api, onFerdig }: { dato: string; time: number; kanHel: boolean; api: Api; onFerdig: () => void }) {
+function NyBooking({ dato, start, lengde, kanHel, api, onFerdig }: {
+  dato: string; start: number; lengde: number; kanHel: boolean; api: Api; onFerdig: () => void;
+}) {
   const prisFor = usePris();
-  const [f, setF] = useState({ navn: '', telefon: '', epost: '', klubb: '', bane: (kanHel ? 'hel' : 'halv') as Bane });
+  const [f, setF] = useState({ navn: '', telefon: '', epost: '', klubb: '', bane: (kanHel ? 'hel' : 'halv') as Bane, start, lengde });
   async function lagre(e: React.FormEvent) {
     e.preventDefault();
-    if (await api('POST', '/api/admin/bestillinger', { ...f, dato, time }, 'Booking lagt inn.')) onFerdig();
+    const { start: s, ...resten } = f;
+    if (await api('POST', '/api/admin/bestillinger', { ...resten, dato, time: Math.floor(s / 60), minutt: s % 60 }, 'Booking lagt inn.')) onFerdig();
   }
   const felt = (k: 'navn' | 'telefon' | 'epost' | 'klubb') => ({
     value: f[k], onChange: (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value }),
@@ -274,12 +280,14 @@ function NyBooking({ dato, time, kanHel, api, onFerdig }: { dato: string; time: 
         <label>Telefon<input {...felt('telefon')} /></label>
         <label>E-post<input type="email" {...felt('epost')} /></label>
         <label>Klubb<input {...felt('klubb')} /></label>
+        <label>Fra<select value={f.start} onChange={e => setF({ ...f, start: Number(e.target.value) })}>{HALVTIMER.map(s => <option key={s} value={s}>{klokke(s)}</option>)}</select></label>
+        <label>Lengde<select value={f.lengde} onChange={e => setF({ ...f, lengde: Number(e.target.value) })}><option value={60}>1 time</option><option value={30}>30 min</option></select></label>
       </div>
       <div className="adm-handlinger">
         <span className="segment">
           {(['hel', 'halv'] as Bane[]).map(b => (
             <button type="button" key={b} disabled={b === 'hel' && !kanHel} className={f.bane === b ? 'pa' : ''} onClick={() => setF({ ...f, bane: b })}>
-              {b === 'hel' ? 'Hel' : 'Halv'} {kr(prisFor(b, dato))}
+              {b === 'hel' ? 'Hel' : 'Halv'} {kr(prisFor(b, dato, f.lengde))}
             </button>
           ))}
         </span>
@@ -319,18 +327,24 @@ function Kalender({ dag, setDag, bestillinger, alle, sperringer, klubbtider, api
       continue;
     }
     const her = bestillinger.filter(b => b.dato === dag && b.time === t);
-    const s = slot(dag, t, belegg, na);
-    if (her.length === 0 && s.ledigeHalvdeler === 0) continue;
+    // Ledig hel time, eller bare den ene halvtimen.
+    const a = halvslot(dag, t * 60, belegg, na).ledigeHalvdeler;
+    const b2 = halvslot(dag, t * 60 + 30, belegg, na).ledigeHalvdeler;
+    const ledig = Math.min(a, b2) > 0 ? { fra: t * 60, lengde: 60, plass: Math.min(a, b2) }
+      : a > 0 ? { fra: t * 60, lengde: 30, plass: a }
+      : b2 > 0 ? { fra: t * 60 + 30, lengde: 30, plass: b2 } : null;
+    if (her.length === 0 && !ledig) continue;
+    const ledigTid = ledig ? (ledig.lengde === 60 ? kl(t) : `${klokke(ledig.fra)}–${klokke(ledig.fra + 30)}`) : '';
     const delvisKlubb = klubbHalvdeler(klubbtiderFor(belegg.klubbtider, dag, t), t) > 0;
     rader.push({
       start: t * 60 + (delvisKlubb ? 1 : 0),
       node: (
         <div key={t} className="adm-time">
           {her.map(b => <Bookingrad key={b.id} b={b} alle={alle} api={api} />)}
-          {s.ledigeHalvdeler > 0 && (
+          {ledig && (
             apen === t
-              ? <div className="adm-rad"><div className="adm-rad-hode"><span className="adm-tid">{kl(t)}</span><strong>Ny booking</strong></div><NyBooking dato={dag} time={t} kanHel={s.ledigeHalvdeler === 2} api={api} onFerdig={() => setApen(null)} /></div>
-              : <button className="adm-ledig" onClick={() => setApen(t)}><span className="adm-tid">{kl(t)}</span><span>{s.ledigeHalvdeler === 2 ? 'Ledig' : 'Halv bane ledig'}</span><span className="tl-pluss">+</span></button>
+              ? <div className="adm-rad"><div className="adm-rad-hode"><span className="adm-tid">{ledigTid}</span><strong>Ny booking</strong></div><NyBooking dato={dag} start={ledig.fra} lengde={ledig.lengde} kanHel={ledig.plass === 2} api={api} onFerdig={() => setApen(null)} /></div>
+              : <button className="adm-ledig" onClick={() => setApen(t)}><span className="adm-tid">{ledigTid}</span><span>{ledig.plass === 2 ? 'Ledig' : 'Halv bane ledig'}</span><span className="tl-pluss">+</span></button>
           )}
         </div>
       ),
@@ -386,7 +400,7 @@ function Bestillingskort({ linjer, alle, api, onDag }: { linjer: Bestilling[]; a
       <ul className="linjer">
         {linjer.map(l => (
           <li key={l.id}>
-            <button className="lenke" onClick={() => onDag(l.dato)}>{langDato(l.dato)} · {tidsrom(l.time)} · {l.bane === 'hel' ? 'Hel' : 'Halv'}</button>
+            <button className="lenke" onClick={() => onDag(l.dato)}>{langDato(l.dato)} · {tidFor(l)} · {l.bane === 'hel' ? 'Hel' : 'Halv'}</button>
             <span className={`status ${l.status}`}>{STATUSTEKST[l.status]}</span>
             <button className="ikonknapp liten" aria-label="Fjern denne timen" onClick={() => api('PATCH', '/api/admin/bestillinger', { ider: [l.id], status: 'avlyst' }, 'Fjernet.')}><X size={14} /></button>
           </li>
@@ -406,7 +420,7 @@ function Bestillingskort({ linjer, alle, api, onDag }: { linjer: Bestilling[]; a
 
 function Bookinger({ bestillinger, alle, sperringer, klubbtider, api, onDag }: { bestillinger: Bestilling[]; alle: Bestilling[]; sperringer: Sperring[]; klubbtider: Klubbtid[]; api: Api; onDag: (d: string) => void }) {
   const na = naIOslo();
-  const kommende = bestillinger.filter(b => b.dato >= na.dato).sort((a, b) => (a.dato + to(a.time)).localeCompare(b.dato + to(b.time)));
+  const kommende = bestillinger.filter(b => b.dato >= na.dato).sort((a, b) => a.dato.localeCompare(b.dato) || startAv(a) - startAv(b));
   const dager = [...new Set(kommende.map(b => b.dato))];
   const bekreftet = bestillinger.filter(b => b.status === 'bekreftet');
   const belegg = byggBelegg(bestillinger, sperringer, klubbtider);

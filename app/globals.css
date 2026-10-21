@@ -571,3 +571,7 @@ main.innhold > h1 { font-size: 2.3rem; line-height: 1.08; color: var(--gronn); f
   padding: 28px max(16px, calc((100% - 728px) / 2)) 40px;
 }
 @media (max-width: 480px) { .fot { margin: 0; padding: 22px 20px 32px; } }
+
+/* «30 min» / «Hele timen»: del en ledig time i halvtimer eller slå sammen */
+.tl-del { justify-self: start; border: 0; background: none; padding: 2px 0 0; font-size: 0.78rem; font-weight: 500; color: var(--gronn); text-decoration: underline; text-underline-offset: 2px; }
+.tl-del:hover { color: var(--gronn-mork); }

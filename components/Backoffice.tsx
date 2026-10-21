@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Copy, KeyRound, Loader2, Lock, LogOut, Mail, MessageSquare, Phone, Plus, UserCheck, UserX } from 'lucide-react';
 import { SESONG, STENGTE_DAGER } from '@/lib/config';
-import { TIMER, klubbNavn, type Klubbtid, type Sperring } from '@/lib/tilgjengelighet';
+import { HALVTIMER, klokke, klubbNavn, lengdeAv, startAv, tidFor, type Klubbtid, type Sperring } from '@/lib/tilgjengelighet';
 import type { Bruker, Loggrad, Rolle } from '@/lib/lager';
 import { dagOgManed, langDato, leggTilDager, mandagI, minutter, naIOslo, ukedag, ukenummer } from '@/lib/dato';
 import { UkeOversikt, klubbFarge, tid, type SynligBestilling } from './AdminKlubber';
@@ -248,10 +248,10 @@ export function Innsyn({ bruker, onUt }: { bruker: Bruker; onUt: () => void }) {
     const bookinger = data.bestillinger.filter(b => b.dato === dag);
     for (const b of bookinger) {
       ut.push({
-        start: b.time * 60 + 0.5,
+        start: startAv(b) + 0.5,
         node: (
           <div key={b.id} className={`innsyn-rad kunde ${b.status}`}>
-            <span className="adm-tid">{to(b.time)}:00–{to(b.time + 1)}:00</span>
+            <span className="adm-tid">{tidFor(b)}</span>
             <strong>{b.navn}{b.klubb ? ` · ${b.klubb}` : ''}</strong>
             <span className="merkelapp">{b.bane === 'hel' ? 'Hel' : 'Halv'}</span>
             {b.status === 'forespurt' && <span className="status forespurt">Ikke bekreftet</span>}
@@ -263,11 +263,19 @@ export function Innsyn({ bruker, onUt }: { bruker: Bruker; onUt: () => void }) {
     for (const s of data.sperringer.filter(s => s.dato === dag)) {
       ut.push({ start: s.fra_time * 60, node: <div key={s.id} className="innsyn-rad sperret"><span className="adm-tid">{to(s.fra_time)}:00–{to(s.til_time)}:00</span><strong>Sperret · {s.arsak}</strong></div> });
     }
-    for (const t of TIMER) {
-      const opptatt = klubber.some(k => minutter(k.fra) < t * 60 + 60 && minutter(k.til) > t * 60)
-        || bookinger.some(b => b.time === t)
-        || data.sperringer.some(s => s.dato === dag && s.fra_time <= t && s.til_time > t);
-      if (!opptatt) ut.push({ start: t * 60, node: <div key={`l${t}`} className="innsyn-rad ledig"><span className="adm-tid">{to(t)}:00–{to(t + 1)}:00</span><span>Ledig</span></div> });
+    // Ledige halvtimer slås sammen til sammenhengende tidsrom.
+    const opptatt = (s: number) => klubber.some(k => minutter(k.fra) <= s && minutter(k.til) > s)
+      || bookinger.some(b => startAv(b) <= s && startAv(b) + lengdeAv(b) > s)
+      || data.sperringer.some(sp => sp.dato === dag && sp.fra_time * 60 <= s && sp.til_time * 60 > s);
+    let fra: number | null = null;
+    for (const s of [...HALVTIMER, HALVTIMER[HALVTIMER.length - 1] + 30]) {
+      const ledig = s < HALVTIMER[HALVTIMER.length - 1] + 30 && !opptatt(s);
+      if (ledig && fra === null) fra = s;
+      if (!ledig && fra !== null) {
+        const a = fra;
+        ut.push({ start: a, node: <div key={`l${a}`} className="innsyn-rad ledig"><span className="adm-tid">{klokke(a)}–{klokke(s)}</span><span>Ledig</span></div> });
+        fra = null;
+      }
     }
     return ut.sort((a, b) => a.start - b.start).map(r => r.node);
   }, [data, dag]);

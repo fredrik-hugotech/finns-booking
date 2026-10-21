@@ -24,6 +24,15 @@ Kalenderen følger samme mønster som mer.golf:
 - Bestillingen sendes som en forespørsel med referanse (SNAK-XXXXX) og blir
   bindende når betalingen er mottatt med Vipps.
 
+### Halvtimer
+
+Alt kan bookes i hele timer eller halvtimer. En halvtime koster halvparten av
+timeprisen (hel bane 995 kr, halv bane 745 kr med dagens priser). Halvtimer
+rundt klubbtidene, som 12:00–12:30 før en klubb starter 12:30, vises og kan
+bookes for seg. En helt ledig time kan deles i to halvtimer med «Del i
+halvtimer». I backoffice velges start (hel eller halv time) og lengde
+(30 min eller 1 time) når en booking legges inn eller endres.
+
 ### Førstemann til mølla
 
 Timene du velger holdes av til deg i 10 minutter, og andre ser dem som

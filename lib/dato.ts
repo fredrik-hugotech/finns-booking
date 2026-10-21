@@ -74,13 +74,13 @@ export function minutter(hhmm: string): number {
 }
 
 // Dato og time «nå» i norsk tid, uavhengig av serverens tidssone.
-export function naIOslo(): { dato: string; time: number } {
+export function naIOslo(): { dato: string; time: number; minutt: number } {
   const deler = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Oslo',
-    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
   }).formatToParts(new Date());
   const f = (t: string) => deler.find(p => p.type === t)?.value ?? '';
-  return { dato: `${f('year')}-${f('month')}-${f('day')}`, time: Number(f('hour')) };
+  return { dato: `${f('year')}-${f('month')}-${f('day')}`, time: Number(f('hour')), minutt: Number(f('minute')) };
 }
 
 export function kr(belop: number): string {

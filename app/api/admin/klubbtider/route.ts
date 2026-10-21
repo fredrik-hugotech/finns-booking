@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminBruker, erAdmin } from '@/lib/tilgang';
 import { fjernKlubbtid, hentBestillinger, hentKlubbtider, lagreKlubbtid, skrivLogg } from '@/lib/lager';
-import { halvdeler, klubbNavn, type Bane, type Bestilling, type Klubbtid } from '@/lib/tilgjengelighet';
+import { halvdeler, klubbNavn, lengdeAv, startAv, type Bane, type Bestilling, type Klubbtid } from '@/lib/tilgjengelighet';
 import { FORSTE_TIME, SESONG, SISTE_TIME, STENGTE_DAGER } from '@/lib/config';
 import { datoer, erGyldigDato, langDato, minutter, naIOslo, ukedag } from '@/lib/dato';
 
@@ -30,7 +30,7 @@ function kollisjoner(k: Omit<Klubbtid, 'id'>, andre: Klubbtid[], bestillinger: B
         .filter(o => o.dag === k.dag && !o.unntak.includes(d) && minutter(o.fra) <= m && minutter(o.til) > m)
         .reduce((n, o) => n + halvdeler(o.bane), 0);
       const booket = bestillinger
-        .filter(b => b.status !== 'avlyst' && b.dato === d && b.time === Math.floor(m / 60))
+        .filter(b => b.status !== 'avlyst' && b.dato === d && startAv(b) <= m && startAv(b) + lengdeAv(b) > m)
         .reduce((n, b) => n + halvdeler(b.bane), 0);
       if (klubb + booket + halvdeler(k.bane) > 2) {
         ut.push(langDato(d));

@@ -9,5 +9,5 @@ export const PrisKontekst = createContext<Priser>(STANDARD_PRIS);
 
 export function usePris() {
   const priser = useContext(PrisKontekst);
-  return (bane: Bane, dato: string) => prisFor(bane, dato, priser);
+  return (bane: Bane, dato: string, lengde = 60) => prisFor(bane, dato, priser, lengde);
 }
