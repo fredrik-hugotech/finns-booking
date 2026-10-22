@@ -81,6 +81,22 @@ Admin er bygget som admin i mer.golf: sidemeny på PC, fanelinje nederst på mob
 - **Priser**: pris per time for hel og halv bane, ukedag og helg. Gjelder nye
   bookinger; timer som allerede er booket beholder prisen sin.
 
+## Påmeldinger (`/p/...` og `/pameldinger`)
+
+Påmeldingsskjemaer for arrangementer, som Start-turneen. Hvert skjema har sin
+egen lenke, for eksempel `/p/start-turneen` (trening og seminar som faner).
+
+Backoffice på **`/pameldinger`** har egne brukere og egen innlogging, helt
+adskilt fra banebookingen:
+
+- **Admin** lager og endrer skjemaer, åpner og stenger påmeldinger, og gir
+  tilgang.
+- **Arrangør** ser bare påmeldingene til sine arrangører (for eksempel
+  «IK Start»), kan søke, laste ned til Excel, kopiere alle e-postadresser og
+  slette en påmelding.
+
+Alt som skjer, logges. Databasedelen ligger i `supabase/pameldinger.sql`.
+
 ## Endre sesong, priser og faste tider
 
 | Hva | Fil |

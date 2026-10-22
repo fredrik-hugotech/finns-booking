@@ -575,3 +575,63 @@ main.innhold > h1 { font-size: 2.3rem; line-height: 1.08; color: var(--gronn); f
 /* «30 min» / «Hele timen»: del en ledig time i halvtimer eller slå sammen */
 .tl-del { justify-self: start; border: 0; background: none; padding: 2px 0 0; font-size: 0.78rem; font-weight: 500; color: var(--gronn); text-decoration: underline; text-underline-offset: 2px; }
 .tl-del:hover { color: var(--gronn-mork); }
+
+/* Påmeldinger: offentlig skjema */
+.pam-topp { gap: 14px; }
+.pam-x { color: var(--gul); font-size: 1.3rem; opacity: 0.8; }
+.pam-partner { height: 42px; width: auto; background: #fff; border-radius: 12px; padding: 3px 8px; }
+.pam-kort { background: #fff; border: 1px solid var(--linje); border-radius: 22px; padding: 22px 20px; margin-top: 18px; }
+.pam-kort.skjema label > span { font-weight: 600; }
+.pam-kort .knapp { margin-top: 4px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.pam-info { margin: 0; padding: 10px 14px; background: var(--gul); color: var(--gronn); border-radius: 12px; font-weight: 500; white-space: pre-line; }
+.pam-feil { color: var(--feil); font-weight: 500; }
+.skjema .ugyldig { border-color: var(--feil); }
+.pam-skjult { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.pam-ferdig { text-align: center; display: grid; justify-items: center; gap: 8px; }
+.pam-ferdig p { margin: 0 0 8px; }
+.pam-hake { width: 64px; height: 64px; border-radius: 50%; background: var(--gronn); color: var(--gul); display: grid; place-items: center; }
+@media (max-width: 480px) {
+  .pam-partner { height: 34px; }
+  .pam-kort { padding: 18px 16px; border-radius: 18px; }
+}
+
+/* Påmeldinger: backoffice */
+.pam-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pam-rad { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; cursor: pointer; }
+.pam-rad:hover { border-color: var(--gronn); }
+.pam-rad-navn { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.pam-antall { display: grid; justify-items: end; line-height: 1.1; }
+.pam-antall strong { font-size: 1.4rem; color: var(--gronn); }
+.pam-tilbake { margin-bottom: 10px; }
+.pam-tall-tekst { font-size: 1rem !important; }
+.pam-verktoy { margin: 0 0 14px; }
+.pam-verktoy a { text-decoration: none; }
+.pam-tabell-kort { overflow-x: auto; padding: 4px 8px; }
+.pam-tabell { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.pam-tabell th { text-align: left; font-size: 0.78rem; color: var(--dempet); font-weight: 600; padding: 10px 8px; border-bottom: 1px solid var(--linje); white-space: nowrap; }
+.pam-tabell td { padding: 9px 8px; border-bottom: 1px solid var(--linje); vertical-align: middle; }
+.pam-tabell tr:last-child td { border-bottom: 0; }
+.pam-tabell a { color: var(--gronn); }
+@media (max-width: 640px) {
+  .pam-tabell thead { display: none; }
+  .pam-tabell tr { display: grid; grid-template-columns: 1fr auto; padding: 10px 4px; border-bottom: 1px solid var(--linje); }
+  .pam-tabell tr:last-child { border-bottom: 0; }
+  .pam-tabell td { border: 0; padding: 1px 0; grid-column: 1; }
+  .pam-tabell td:first-child { font-weight: 600; }
+  .pam-tabell td:last-child { grid-column: 2; grid-row: 1 / span 9; align-self: center; }
+}
+.pam-rediger h3 { font-size: 1rem; margin: 10px 0 0; color: var(--gronn); }
+.pam-hint { margin: -6px 0 0; }
+.pam-hint code { background: var(--flate); padding: 1px 6px; border-radius: 6px; }
+.pam-felter { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pam-felt-rad { display: grid; grid-template-columns: 1fr 160px auto; gap: 8px; align-items: end; }
+.pam-felt-knapper { display: flex; gap: 2px; padding-bottom: 4px; }
+.pam-felt-knapper button:disabled { opacity: 0.3; }
+.pam-nytt-felt { justify-self: start; }
+@media (max-width: 520px) {
+  .pam-felt-rad { grid-template-columns: 1fr 1fr; }
+  .pam-felt-knapper { grid-column: 1 / -1; justify-content: flex-end; }
+}
+.pam-arrangorvalg { display: grid; gap: 6px; }
+.pam-annen { display: flex; gap: 6px; align-items: center; }
+.pam-annen input { flex: 1; max-width: 240px; }

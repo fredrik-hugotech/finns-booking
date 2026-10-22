@@ -30,7 +30,7 @@ function supabase(): SupabaseClient | null {
   return klient;
 }
 
-async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
+export async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = await supabase()!.rpc(fn, { p_nokkel: process.env.SNAK_API_NOKKEL, ...args });
   if (error) {
     if (error.message.includes('OPPTATT')) throw new OpptattFeil();
