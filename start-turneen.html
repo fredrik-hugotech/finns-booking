@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<!--
+  Påmelding til Start-turneen – arrangert av Finns.Fairway i samarbeid
+  med IK Start. To skjemaer på samme side:
+
+    start-turneen.html#trening  – deltakers navn, årskull, foresattes e-post
+    start-turneen.html#seminar  – deltakers navn og e-post
+
+  Påmeldingene lagres i Supabase-tabellen `start_turne_pameldinger`.
+  Publikum kan bare sende inn, ikke lese – se dem i Supabase
+  (Table editor → start_turne_pameldinger → Export to CSV).
+
+  Start-logoen hentes fra `start-logo.png`. Mangler filen, vises et
+  enkelt ordmerke i stedet.
+-->
+<html lang="no">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Start-turneen – påmelding</title>
+    <meta name="description" content="Påmelding til trening og seminar på Start-turneen, Finns.Fairway og IK Start.">
+    <link rel="stylesheet" href="start-turneen.css">
+    <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+  </head>
+  <body>
+    <header class="st-header">
+      <div class="st-logos">
+        <img src="ff-logo-gronn.png" alt="Finns.Fairway" class="st-logo">
+        <span class="st-x" aria-hidden="true">×</span>
+        <span class="st-logo-slot">
+          <img src="start-logo.png" alt="IK Start" class="st-logo" id="startLogo">
+          <span class="st-wordmark" id="startWordmark" hidden>IK&nbsp;START</span>
+        </span>
+      </div>
+    </header>
+
+    <main class="st-main">
+      <section class="st-hero">
+        <p class="st-kicker">Finns.Fairway &amp; IK Start presenterer</p>
+        <h1>Start-turneen</h1>
+        <p class="st-lead">Meld deg på treningen, seminaret – eller begge deler.</p>
+      </section>
+
+      <div class="st-tabs" role="tablist" aria-label="Velg påmelding">
+        <button type="button" role="tab" id="tab-trening" aria-controls="panel-trening" data-tab="trening">
+          <span class="st-tab-title">Trening</span>
+          <span class="st-tab-sub">For barn og unge</span>
+        </button>
+        <button type="button" role="tab" id="tab-seminar" aria-controls="panel-seminar" data-tab="seminar">
+          <span class="st-tab-title">Seminar</span>
+          <span class="st-tab-sub">Navn og e-post</span>
+        </button>
+      </div>
+
+      <!-- Trening -->
+      <section class="st-card" role="tabpanel" id="panel-trening" aria-labelledby="tab-trening">
+        <form id="form-trening" novalidate>
+          <h2>Påmelding til trening</h2>
+          <p class="st-event" data-event="trening" hidden></p>
+
+          <label for="t-navn">Deltakers navn</label>
+          <input id="t-navn" name="deltaker_navn" type="text" autocomplete="off" placeholder="Fornavn og etternavn" required>
+
+          <label for="t-arskull">Deltakers årskull</label>
+          <select id="t-arskull" name="arskull" required>
+            <option value="" disabled selected>Velg årskull</option>
+          </select>
+
+          <label for="t-epost">E-post til foresatt</label>
+          <input id="t-epost" name="foresatt_epost" type="email" inputmode="email" autocomplete="email" placeholder="navn@eksempel.no" required>
+          <p class="st-hint">Vi sender praktisk informasjon om treningen hit.</p>
+
+          <p class="st-error" role="alert"></p>
+          <button type="submit" class="st-submit">Meld på</button>
+        </form>
+
+        <div class="st-done" hidden>
+          <div class="st-check" aria-hidden="true">✓</div>
+          <h2>Påmeldt!</h2>
+          <p class="st-done-text"></p>
+          <button type="button" class="st-again">Meld på en til</button>
+          <p class="st-hint">Søsken? E-posten til foresatt blir stående.</p>
+        </div>
+      </section>
+
+      <!-- Seminar -->
+      <section class="st-card" role="tabpanel" id="panel-seminar" aria-labelledby="tab-seminar" hidden>
+        <form id="form-seminar" novalidate>
+          <h2>Påmelding til seminar</h2>
+          <p class="st-event" data-event="seminar" hidden></p>
+
+          <label for="s-navn">Deltakers navn</label>
+          <input id="s-navn" name="deltaker_navn" type="text" autocomplete="name" placeholder="Fornavn og etternavn" required>
+
+          <label for="s-epost">Deltakers e-post</label>
+          <input id="s-epost" name="deltaker_epost" type="email" inputmode="email" autocomplete="email" placeholder="navn@eksempel.no" required>
+
+          <p class="st-error" role="alert"></p>
+          <button type="submit" class="st-submit">Meld på</button>
+        </form>
+
+        <div class="st-done" hidden>
+          <div class="st-check" aria-hidden="true">✓</div>
+          <h2>Påmeldt!</h2>
+          <p class="st-done-text"></p>
+          <button type="button" class="st-again">Meld på en til</button>
+        </div>
+      </section>
+
+      <p class="st-privacy">
+        Opplysningene brukes kun til gjennomføring av Start-turneen og deles
+        bare mellom Finns.Fairway og IK Start.
+      </p>
+    </main>
+
+    <footer class="st-footer">
+      <p>Finns.Fairway × IK Start · For en trygg og aktiv oppvekst</p>
+    </footer>
+
+    <script src="start-turneen.js"></script>
+  </body>
+</html>
