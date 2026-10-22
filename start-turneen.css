@@ -1,36 +1,59 @@
 /*
-  Start-turneen: Finns.Fairway-grønt og IK Start-blått på lik linje.
+  Start-turneen: samme typografi og farger som finnsfairway.no.
+  Gilmer-fontene hentes fra finnsfairway.no via en rewrite i vercel.json
+  (/fonts/* → finnsfairway.no), siden de ikke serveres med CORS-header.
 */
 
+@font-face {
+  font-family: 'Gilmer';
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Gilmer-Regular.woff') format('woff');
+}
+@font-face {
+  font-family: 'Gilmer';
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/Gilmer-Medium.woff') format('woff');
+}
+@font-face {
+  font-family: 'Gilmer';
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/Gilmer-Bold.woff') format('woff');
+}
+
 :root {
+  /* Fra finnsfairway.no (Elementor globale farger) */
   --ff-green: #005a4f;
   --ff-beige: #f5ead8;
-  --start-blue: #202c90;
-  --text: #0a1713;
+  --ff-yellow: #fffac2;
+  --ff-bg: #fcf9f4;
+  --text: #000000;
   --muted: #5b6b66;
   --error: #b42318;
-  --card: #ffffff;
-  --radius: 14px;
+  --radius: 30px;
+  --shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background: var(--ff-beige);
+  font-family: 'Gilmer', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-weight: 400;
+  background: var(--ff-bg);
   color: var(--text);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-/* Header: like store logoer, delt grønn/gul stripe under */
+/* Header: like store logoer for Finns.Fairway og IK Start */
 .st-header {
   background: #fff;
   padding: 1rem;
-  border-bottom: 6px solid;
-  border-image: linear-gradient(90deg, var(--ff-green) 50%, var(--start-blue) 50%) 1;
+  border-bottom: 6px solid var(--ff-green);
 }
 
 .st-logos {
@@ -60,12 +83,12 @@ body {
   justify-content: center;
   height: 64px;
   padding: 0 1rem;
-  background: var(--start-blue);
-  color: #fff;
-  font-weight: 900;
+  background: var(--ff-green);
+  color: var(--ff-yellow);
+  font-weight: 800;
   font-size: 1.5rem;
   letter-spacing: 0.06em;
-  border-radius: 8px;
+  border-radius: 12px;
 }
 
 .st-main {
@@ -76,20 +99,29 @@ body {
   padding: 1.5rem 1rem 2rem;
 }
 
-.st-hero { text-align: center; margin-bottom: 1.5rem; }
+.st-hero {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  padding: 1.75rem 1rem;
+  background: var(--ff-beige);
+  border-radius: var(--radius);
+}
 .st-kicker {
   margin: 0;
   font-size: 0.8rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--muted);
+  color: var(--ff-green);
 }
 .st-hero h1 {
   margin: 0.25rem 0;
   font-size: clamp(2rem, 8vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.1;
   color: var(--ff-green);
 }
-.st-lead { margin: 0; color: var(--muted); }
+.st-lead { margin: 0; font-size: 1.05rem; }
 
 /* Faner */
 .st-tabs {
@@ -103,39 +135,46 @@ body {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.15rem;
-  padding: 0.85rem 1rem;
-  border: 2px solid transparent;
-  border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.6);
-  color: var(--text);
+  padding: 0.9rem 1.1rem;
+  border: 0;
+  border-radius: 21px;
+  background: var(--ff-beige);
+  color: var(--ff-green);
   cursor: pointer;
   text-align: left;
   font: inherit;
 }
 .st-tabs button.active {
-  background: #fff;
-  border-color: var(--ff-green);
-  box-shadow: 0 4px 14px rgba(0, 90, 79, 0.12);
+  background: var(--ff-green);
+  color: var(--ff-yellow);
+  box-shadow: var(--shadow);
 }
-.st-tabs button:focus-visible { outline: 3px solid var(--start-blue); outline-offset: 2px; }
-.st-tab-title { font-weight: 700; font-size: 1.05rem; }
-.st-tab-sub { font-size: 0.8rem; color: var(--muted); }
+.st-tabs button:focus-visible { outline: 3px solid var(--ff-green); outline-offset: 2px; }
+.st-tab-title { font-weight: 600; font-size: 1.1rem; }
+.st-tab-sub { font-size: 0.8rem; opacity: 0.85; }
 
 /* Kort og skjema */
 .st-card {
-  background: var(--card);
+  background: #fff;
   border-radius: var(--radius);
-  padding: 1.5rem;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+  padding: 1.75rem 1.5rem;
+  box-shadow: var(--shadow);
 }
-.st-card h2 { margin: 0 0 1rem; color: var(--ff-green); font-size: 1.3rem; }
+.st-card h2 {
+  margin: 0 0 1.25rem;
+  color: var(--ff-green);
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
 
 .st-event {
-  margin: -0.5rem 0 1rem;
-  padding: 0.6rem 0.8rem;
-  background: #eef0fb;
-  border-left: 4px solid var(--start-blue);
-  border-radius: 6px;
+  margin: -0.5rem 0 1.25rem;
+  padding: 0.7rem 1rem;
+  background: var(--ff-yellow);
+  color: var(--ff-green);
+  border-radius: 12px;
+  font-weight: 600;
   font-size: 0.95rem;
 }
 
@@ -151,16 +190,17 @@ form select {
   width: 100%;
   font: inherit;
   font-size: 16px; /* hindrer zoom på iPhone */
-  padding: 0.8rem 0.9rem;
-  border: 1.5px solid #cfd8d5;
-  border-radius: 10px;
-  background: #fff;
+  padding: 0.85rem 1rem;
+  border: 1.5px solid #e2d8c6;
+  border-radius: 12px;
+  background: var(--ff-bg);
   color: var(--text);
 }
 form input:focus,
 form select:focus {
   outline: none;
   border-color: var(--ff-green);
+  background: #fff;
   box-shadow: 0 0 0 3px rgba(0, 90, 79, 0.15);
 }
 form .invalid { border-color: var(--error); }
@@ -172,41 +212,41 @@ form .invalid { border-color: var(--error); }
 .st-again {
   width: 100%;
   margin-top: 0.75rem;
-  padding: 0.95rem;
+  padding: 1rem;
   border: 0;
-  border-radius: 10px;
+  border-radius: 30px;
   background: var(--ff-green);
-  color: #fff;
+  color: var(--ff-yellow);
   font: inherit;
-  font-weight: 700;
-  font-size: 1.05rem;
+  font-weight: 600;
+  font-size: 1.1rem;
   cursor: pointer;
 }
-.st-submit:hover, .st-again:hover { filter: brightness(1.1); }
+.st-submit:hover, .st-again:hover { filter: brightness(1.15); }
 .st-submit:disabled { opacity: 0.6; cursor: wait; }
 
 /* Kvittering */
 .st-done { text-align: center; }
 .st-check {
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
   margin: 0 auto 0.75rem;
   border-radius: 50%;
-  background: var(--start-blue);
-  color: #fff;
+  background: var(--ff-green);
+  color: var(--ff-yellow);
   font-size: 2rem;
-  font-weight: 900;
-  line-height: 64px;
+  font-weight: 800;
+  line-height: 72px;
 }
 .st-again { background: #fff; color: var(--ff-green); border: 2px solid var(--ff-green); }
 
 .st-privacy { margin: 1.25rem 0 0; font-size: 0.8rem; color: var(--muted); text-align: center; }
 
 .st-footer {
-  padding: 1rem;
+  padding: 1.25rem 1rem;
   text-align: center;
-  font-size: 0.85rem;
-  color: #fff;
+  font-size: 0.9rem;
+  color: var(--ff-yellow);
   background: var(--ff-green);
 }
 .st-footer p { margin: 0; }
