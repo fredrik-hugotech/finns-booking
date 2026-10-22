@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/fonts/:file",
+      "destination": "https://finnsfairway.no/wp/wp-content/uploads/2025/02/:file"
+    }
+  ]
+}
