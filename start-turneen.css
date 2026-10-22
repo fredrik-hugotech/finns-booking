@@ -1,9 +1,3 @@
-/*
-  Start-turneen: samme typografi og farger som finnsfairway.no.
-  Gilmer-fontene hentes fra finnsfairway.no via en rewrite i vercel.json
-  (/fonts/* → finnsfairway.no), siden de ikke serveres med CORS-header.
-*/
-
 @font-face {
   font-family: 'Gilmer';
   font-weight: 400;
@@ -24,8 +18,7 @@
 }
 
 :root {
-  /* Fra finnsfairway.no (Elementor globale farger) */
-  --ff-green: #005a4f;
+    --ff-green: #005a4f;
   --ff-beige: #f5ead8;
   --ff-yellow: #fffac2;
   --ff-bg: #fcf9f4;
@@ -49,7 +42,6 @@ body {
   flex-direction: column;
 }
 
-/* Header: like store logoer for Finns.Fairway og IK Start */
 .st-header {
   background: #fff;
   padding: 1rem;
@@ -65,8 +57,6 @@ body {
   gap: 1rem;
 }
 
-.st-logo-slot { display: flex; justify-content: center; }
-
 .st-logo {
   width: 100%;
   max-width: 200px;
@@ -76,20 +66,6 @@ body {
 }
 
 .st-x { font-size: 1.5rem; color: var(--muted); }
-
-.st-wordmark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 64px;
-  padding: 0 1rem;
-  background: var(--ff-green);
-  color: var(--ff-yellow);
-  font-weight: 800;
-  font-size: 1.5rem;
-  letter-spacing: 0.06em;
-  border-radius: 12px;
-}
 
 .st-main {
   flex: 1;
@@ -106,24 +82,14 @@ body {
   background: var(--ff-beige);
   border-radius: var(--radius);
 }
-.st-kicker {
-  margin: 0;
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--ff-green);
-}
 .st-hero h1 {
-  margin: 0.25rem 0;
+  margin: 0;
   font-size: clamp(2rem, 8vw, 2.75rem);
   font-weight: 800;
   line-height: 1.1;
   color: var(--ff-green);
 }
-.st-lead { margin: 0; font-size: 1.05rem; }
 
-/* Faner */
 .st-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -151,9 +117,7 @@ body {
 }
 .st-tabs button:focus-visible { outline: 3px solid var(--ff-green); outline-offset: 2px; }
 .st-tab-title { font-weight: 600; font-size: 1.1rem; }
-.st-tab-sub { font-size: 0.8rem; opacity: 0.85; }
 
-/* Kort og skjema */
 .st-card {
   background: #fff;
   border-radius: var(--radius);
@@ -189,8 +153,7 @@ form input,
 form select {
   width: 100%;
   font: inherit;
-  font-size: 16px; /* hindrer zoom på iPhone */
-  padding: 0.85rem 1rem;
+  font-size: 16px;   padding: 0.85rem 1rem;
   border: 1.5px solid #e2d8c6;
   border-radius: 12px;
   background: var(--ff-bg);
@@ -205,7 +168,6 @@ form select:focus {
 }
 form .invalid { border-color: var(--error); }
 
-.st-hint { margin: 0.35rem 0 0; font-size: 0.85rem; color: var(--muted); }
 .st-error { min-height: 1.25rem; margin: 1rem 0 0; color: var(--error); font-weight: 600; }
 
 .st-submit,
@@ -225,7 +187,6 @@ form .invalid { border-color: var(--error); }
 .st-submit:hover, .st-again:hover { filter: brightness(1.15); }
 .st-submit:disabled { opacity: 0.6; cursor: wait; }
 
-/* Kvittering */
 .st-done { text-align: center; }
 .st-check {
   width: 72px;
@@ -239,8 +200,6 @@ form .invalid { border-color: var(--error); }
   line-height: 72px;
 }
 .st-again { background: #fff; color: var(--ff-green); border: 2px solid var(--ff-green); }
-
-.st-privacy { margin: 1.25rem 0 0; font-size: 0.8rem; color: var(--muted); text-align: center; }
 
 .st-footer {
   padding: 1.25rem 1rem;

@@ -1,35 +1,17 @@
-/*
- * Påmelding til Start-turneen (trening og seminar).
- * Lagrer i Supabase-tabellen `start_turne_pameldinger`, der publikum
- * bare har lov til å sette inn rader.
- */
-
 const SUPABASE_URL = 'https://bpbqcqqlqrdruxbottdn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwYnFjcXFscXJkcnV4Ym90dGRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE5MDAzNTAsImV4cCI6MjA3NzQ3NjM1MH0.kxHA7ta7ld95-PDhVEDvkgxJ-BhHjI0Zn2fwWv7LFNc';
 
-// Fyll inn tid og sted når det er klart – tom tekst skjules.
 const ARRANGEMENT = {
-  trening: '', // f.eks. 'Lørdag 14. november kl. 10–12 · Sparebanken Norge Arena'
-  seminar: ''  // f.eks. 'Lørdag 14. november kl. 13–15 · Clubhouse'
+  trening: '',
+  seminar: ''
 };
 
-// Årskull som kan velges (nyeste først).
 const ARSKULL_FRA = 2006;
 const ARSKULL_TIL = 2021;
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
-// --- Logo: fall tilbake til ordmerke hvis start-logo.png mangler ---
-const startLogo = document.getElementById('startLogo');
-const showWordmark = () => {
-  startLogo.hidden = true;
-  document.getElementById('startWordmark').hidden = false;
-};
-startLogo.addEventListener('error', showWordmark);
-if (startLogo.complete && startLogo.naturalWidth === 0) showWordmark();
-
-// --- Arrangementsinfo ---
 document.querySelectorAll('[data-event]').forEach((el) => {
   const text = ARRANGEMENT[el.dataset.event];
   if (text) {
@@ -38,13 +20,11 @@ document.querySelectorAll('[data-event]').forEach((el) => {
   }
 });
 
-// --- Årskull ---
 const arskullSelect = document.getElementById('t-arskull');
 for (let y = ARSKULL_TIL; y >= ARSKULL_FRA; y--) {
   arskullSelect.add(new Option(String(y), String(y)));
 }
 
-// --- Faner (#trening / #seminar gir egne lenker) ---
 const tabs = document.querySelectorAll('[data-tab]');
 
 function showTab(name) {
@@ -67,7 +47,6 @@ const tabFromHash = () => (location.hash === '#seminar' ? 'seminar' : 'trening')
 window.addEventListener('hashchange', () => showTab(tabFromHash()));
 showTab(tabFromHash());
 
-// --- Skjemaer ---
 function setupForm(arrangement, { validate, payload, doneText, keepOnAgain = [] }) {
   const panel = document.getElementById(`panel-${arrangement}`);
   const form = panel.querySelector('form');
