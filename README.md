@@ -81,6 +81,24 @@ Admin er bygget som admin i mer.golf: sidemeny på PC, fanelinje nederst på mob
 - **Priser**: pris per time for hel og halv bane, ukedag og helg. Gjelder nye
   bookinger; timer som allerede er booket beholder prisen sin.
 
+## Påmeldinger (`/p/...` og `/pameldinger`)
+
+Påmeldinger for alt Finns.Fairway arrangerer: Start-turneen, Finns.Fairway Cup,
+Jentegolf, frivillige og så videre. Hver satsing er en egen meny i backoffice,
+med en eller flere deler (for eksempel trening og seminar). Hver meny har sin
+egen lenke, for eksempel `/p/start-turneen`, der delene vises som faner.
+
+Backoffice på **`/pameldinger`** har egne brukere og egen innlogging, helt
+adskilt fra banebookingen:
+
+- **Admin** lager nye menyer og deler med egne felter, åpner og stenger
+  påmeldinger, og gir tilgang. En ny meny er stengt til den åpnes.
+- **Arrangør** ser bare påmeldingene til sine arrangører (for eksempel
+  «IK Start»), kan søke, laste ned til Excel, kopiere alle e-postadresser og
+  slette en påmelding.
+
+Alt som skjer, logges. Databasedelen ligger i `supabase/pameldinger.sql`.
+
 ## Endre sesong, priser og faste tider
 
 | Hva | Fil |
