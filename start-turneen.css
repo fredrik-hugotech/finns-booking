@@ -1,12 +1,11 @@
 /*
-  Start-turneen: Finns.Fairway-grønt og IK Start-gult på lik linje.
+  Start-turneen: Finns.Fairway-grønt og IK Start-blått på lik linje.
 */
 
 :root {
   --ff-green: #005a4f;
   --ff-beige: #f5ead8;
-  --start-yellow: #ffd200;
-  --start-black: #111111;
+  --start-blue: #202c90;
   --text: #0a1713;
   --muted: #5b6b66;
   --error: #b42318;
@@ -31,7 +30,7 @@ body {
   background: #fff;
   padding: 1rem;
   border-bottom: 6px solid;
-  border-image: linear-gradient(90deg, var(--ff-green) 50%, var(--start-yellow) 50%) 1;
+  border-image: linear-gradient(90deg, var(--ff-green) 50%, var(--start-blue) 50%) 1;
 }
 
 .st-logos {
@@ -48,7 +47,7 @@ body {
 .st-logo {
   width: 100%;
   max-width: 200px;
-  height: 64px;
+  height: 72px;
   object-fit: contain;
   justify-self: center;
 }
@@ -61,8 +60,8 @@ body {
   justify-content: center;
   height: 64px;
   padding: 0 1rem;
-  background: var(--start-yellow);
-  color: var(--start-black);
+  background: var(--start-blue);
+  color: #fff;
   font-weight: 900;
   font-size: 1.5rem;
   letter-spacing: 0.06em;
@@ -118,7 +117,7 @@ body {
   border-color: var(--ff-green);
   box-shadow: 0 4px 14px rgba(0, 90, 79, 0.12);
 }
-.st-tabs button:focus-visible { outline: 3px solid var(--start-yellow); outline-offset: 2px; }
+.st-tabs button:focus-visible { outline: 3px solid var(--start-blue); outline-offset: 2px; }
 .st-tab-title { font-weight: 700; font-size: 1.05rem; }
 .st-tab-sub { font-size: 0.8rem; color: var(--muted); }
 
@@ -134,8 +133,8 @@ body {
 .st-event {
   margin: -0.5rem 0 1rem;
   padding: 0.6rem 0.8rem;
-  background: #fffbe0;
-  border-left: 4px solid var(--start-yellow);
+  background: #eef0fb;
+  border-left: 4px solid var(--start-blue);
   border-radius: 6px;
   font-size: 0.95rem;
 }
@@ -193,8 +192,8 @@ form .invalid { border-color: var(--error); }
   height: 64px;
   margin: 0 auto 0.75rem;
   border-radius: 50%;
-  background: var(--start-yellow);
-  color: var(--start-black);
+  background: var(--start-blue);
+  color: #fff;
   font-size: 2rem;
   font-weight: 900;
   line-height: 64px;
