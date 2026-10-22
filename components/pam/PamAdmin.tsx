@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowDown, ArrowLeft, ArrowUp, ClipboardList, Download, History, KeyRound, Link2, Loader2, Lock, LogOut, Mail, Pencil, Plus, Trash2, UserCheck, UserX, Users, X,
+  ArrowDown, ArrowLeft, ArrowUp, ClipboardList, Download, History, KeyRound, LayoutGrid, Link2, Loader2, Lock, LogOut, Mail, Pencil, Plus, Trash2, UserCheck, UserX, Users, X,
 } from 'lucide-react';
-import { FELTTYPER, PARTNERE, lagSlug, navnPa, type Arrangement, type Felt, type Felttype, type Svar } from '@/lib/pam/felter';
+import { FELTTYPER, PARTNERE, STANDARDFELTER, lagSlug, menyAv, menyer, navnPa, type Arrangement, type Felt, type Felttype, type Meny, type Svar } from '@/lib/pam/felter';
 import type { PamBruker, PamRolle } from '@/lib/pam/lager';
 import { Logg, MittPassord, NyttPassord } from '../Backoffice';
 
-type Fane = 'pameldinger' | 'brukere' | 'logg' | 'passord';
+type Fane = 'oversikt' | 'meny' | 'brukere' | 'logg' | 'passord';
 type Melding = { tekst: string; feil?: boolean } | null;
 
 const ROLLER: Record<PamRolle, { navn: string; forklaring: string }> = {
@@ -17,7 +17,6 @@ const ROLLER: Record<PamRolle, { navn: string; forklaring: string }> = {
 };
 
 const tidspunkt = (iso: string) => new Date(iso).toLocaleString('nb-NO', { timeZone: 'Europe/Oslo', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-const offentligLenke = (a: Arrangement) => `${location.origin}/p/${a.serie ?? a.slug}${a.serie ? `#${lagSlug(a.fane ?? a.slug)}` : ''}`;
 
 async function json(metode: string, url: string, body?: unknown) {
   const r = await fetch(url, { method: metode, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
@@ -66,10 +65,11 @@ function Login({ demo, onInne }: { demo: boolean; onInne: (b: PamBruker) => void
 
 function Panel({ meg, onUt }: { meg: PamBruker; onUt: () => void }) {
   const admin = meg.rolle === 'admin';
-  const [fane, setFane] = useState<Fane>('pameldinger');
+  const [fane, setFane] = useState<Fane>('oversikt');
   const [arrangementer, setArrangementer] = useState<Arrangement[] | null>(null);
-  const [valgt, setValgt] = useState<string | null>(null);
-  const [redigerer, setRedigerer] = useState<Arrangement | 'ny' | null>(null);
+  const [menyKey, setMenyKey] = useState<string | null>(null);
+  const [del, setDel] = useState<string | null>(null);
+  const [redigerer, setRedigerer] = useState<{ a: Arrangement | null; meny: Meny | null } | null>(null);
   const [melding, setMelding] = useState<Melding>(null);
 
   async function last() {
@@ -84,19 +84,20 @@ function Panel({ meg, onUt }: { meg: PamBruker; onUt: () => void }) {
     onUt();
   }
 
-  const faner: { key: Fane; navn: string; ikon: typeof ClipboardList }[] = [
-    { key: 'pameldinger', navn: 'Påmeldinger', ikon: ClipboardList },
-    ...(admin ? [{ key: 'brukere' as Fane, navn: 'Brukere', ikon: Users }, { key: 'logg' as Fane, navn: 'Logg', ikon: History }] : []),
-    { key: 'passord', navn: 'Passord', ikon: KeyRound },
-  ];
-  const a = arrangementer?.find(x => x.id === valgt) ?? null;
+  const alleMenyer = useMemo(() => menyer(arrangementer ?? []), [arrangementer]);
+  const meny = alleMenyer.find(m => m.key === menyKey) ?? null;
 
-  function bytt(f: Fane) {
+  function bytt(f: Fane, key: string | null = null) {
     setFane(f);
-    setValgt(null);
+    setMenyKey(key);
+    setDel(null);
     setRedigerer(null);
     setMelding(null);
   }
+
+  const knapp = (f: Fane, navn: string, Ikon: typeof ClipboardList, klasse = '') => (
+    <button key={f} className={`${klasse} ${fane === f && !redigerer ? 'aktiv' : ''}`} onClick={() => bytt(f)}><Ikon size={18} /> {navn}</button>
+  );
 
   return (
     <div className="adm admin">
@@ -104,73 +105,95 @@ function Panel({ meg, onUt }: { meg: PamBruker; onUt: () => void }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.png" alt="Finns.Fairway" className="adm-logo" />
         <nav>
-          {faner.map(f => (
-            <button key={f.key} className={fane === f.key ? 'aktiv' : ''} onClick={() => bytt(f.key)}>
-              <f.ikon size={18} /> {f.navn}
+          {knapp('oversikt', 'Oversikt', LayoutGrid)}
+          {alleMenyer.length > 0 && <span className="pam-menytittel">Menyer</span>}
+          {alleMenyer.map(m => (
+            <button key={m.key} className={`pam-menyknapp ${fane === 'meny' && menyKey === m.key && !redigerer ? 'aktiv' : ''}`} onClick={() => bytt('meny', m.key)}>
+              <ClipboardList size={18} /> <span className="pam-menynavn">{m.navn}</span>
+              {m.antall > 0 && <span className="pam-teller">{m.antall}</span>}
             </button>
           ))}
+          {admin && (
+            <button className={`pam-menyknapp pam-nymeny ${redigerer && !redigerer.a && !redigerer.meny ? 'aktiv' : ''}`} onClick={() => { bytt('oversikt'); setRedigerer({ a: null, meny: null }); }}>
+              <Plus size={18} /> Ny meny
+            </button>
+          )}
+          {admin && knapp('brukere', 'Brukere', Users)}
+          {admin && knapp('logg', 'Logg', History)}
+          {knapp('passord', 'Passord', KeyRound)}
         </nav>
         <button className="adm-ut" onClick={loggUt}><LogOut size={18} /> Logg ut</button>
       </aside>
       <main className="adm-innhold">
         {melding && <div className={`banner ${melding.feil ? 'feil' : ''}`}>{melding.tekst}</div>}
-        {fane === 'pameldinger' && (
-          redigerer ? (
-            <Rediger
-              a={redigerer === 'ny' ? null : redigerer}
-              alle={arrangementer ?? []}
-              onAvbryt={() => setRedigerer(null)}
-              onLagret={async (id, tekst) => {
-                await last();
-                setRedigerer(null);
-                setValgt(id);
-                setMelding({ tekst });
-              }}
-            />
-          ) : a ? (
-            <Detalj
-              a={a}
-              admin={admin}
-              onTilbake={() => { setValgt(null); setMelding(null); last(); }}
-              onRediger={() => setRedigerer(a)}
-              onEndret={last}
-              setMelding={setMelding}
-            />
-          ) : (
-            <Oversikt arrangementer={arrangementer} admin={admin} meg={meg} onVelg={id => { setValgt(id); setMelding(null); }} onNy={() => setRedigerer('ny')} />
-          )
-        )}
-        {fane === 'brukere' && admin && <Brukere meg={meg} arrangorer={[...new Set((arrangementer ?? []).map(x => x.arrangor))]} />}
-        {fane === 'logg' && admin && <><div className="adm-topp"><h1>Logg</h1></div><Logg api="/api/pam" /></>}
-        {fane === 'passord' && <><div className="adm-topp"><h1>Passord</h1></div><MittPassord api="/api/pam" /></>}
+        {redigerer ? (
+          <Rediger
+            a={redigerer.a}
+            meny={redigerer.meny}
+            alle={arrangementer ?? []}
+            onAvbryt={() => setRedigerer(null)}
+            onLagret={async (id, tekst) => {
+              const r = await json('GET', '/api/pam/arrangementer');
+              const nye: Arrangement[] = r.data.arrangementer ?? [];
+              setArrangementer(nye);
+              const ny = nye.find(x => x.id === id);
+              setRedigerer(null);
+              setFane('meny');
+              setMenyKey(ny ? menyAv(ny) : null);
+              setDel(id);
+              setMelding({ tekst });
+            }}
+          />
+        ) : fane === 'meny' && meny ? (
+          <MenyVisning
+            meny={meny}
+            admin={admin}
+            del={del}
+            setDel={id => { setDel(id); setMelding(null); }}
+            onRediger={a => setRedigerer({ a, meny })}
+            onNyDel={() => setRedigerer({ a: null, meny })}
+            onEndret={last}
+            setMelding={setMelding}
+          />
+        ) : fane === 'oversikt' || fane === 'meny' ? (
+          <Oversikt menyer={arrangementer ? alleMenyer : null} admin={admin} meg={meg} onVelg={key => bytt('meny', key)} onNy={() => setRedigerer({ a: null, meny: null })} />
+        ) : null}
+        {!redigerer && fane === 'brukere' && admin && <Brukere meg={meg} arrangorer={[...new Set((arrangementer ?? []).map(x => x.arrangor))]} />}
+        {!redigerer && fane === 'logg' && admin && <><div className="adm-topp"><h1>Logg</h1></div><Logg api="/api/pam" /></>}
+        {!redigerer && fane === 'passord' && <><div className="adm-topp"><h1>Passord</h1></div><MittPassord api="/api/pam" /></>}
       </main>
     </div>
   );
 }
 
-function Oversikt({ arrangementer, admin, meg, onVelg, onNy }: {
-  arrangementer: Arrangement[] | null; admin: boolean; meg: PamBruker; onVelg: (id: string) => void; onNy: () => void;
+const status = (m: Meny) => m.arrangementer.some(a => a.aapen);
+
+function Oversikt({ menyer, admin, meg, onVelg, onNy }: {
+  menyer: Meny[] | null; admin: boolean; meg: PamBruker; onVelg: (key: string) => void; onNy: () => void;
 }) {
   return (
     <>
       <div className="adm-topp">
-        <h1>Påmeldinger</h1>
-        {admin && <button className="liten-knapp primar" onClick={onNy}><Plus size={14} /> Ny påmelding</button>}
+        <h1>Oversikt</h1>
+        {admin && <button className="liten-knapp primar" onClick={onNy}><Plus size={14} /> Ny meny</button>}
       </div>
-      {!arrangementer ? <div className="laster"><Loader2 className="spinn" size={18} /> Laster …</div>
-        : !arrangementer.length ? (
-          <div className="kort tomt">{admin ? 'Ingen påmeldinger ennå. Lag den første med «Ny påmelding».' : `Ingen påmeldinger for ${meg.arrangorer.join(', ')} ennå.`}</div>
+      {!menyer ? <div className="laster"><Loader2 className="spinn" size={18} /> Laster …</div>
+        : !menyer.length ? (
+          <div className="kort tomt">{admin ? 'Ingen menyer ennå. Lag den første med «Ny meny».' : `Ingen påmeldinger for ${meg.arrangorer.join(', ')} ennå.`}</div>
         ) : (
           <ul className="pam-liste">
-            {arrangementer.map(a => (
-              <li key={a.id}>
-                <button className="kort pam-rad" onClick={() => onVelg(a.id)}>
+            {menyer.map(m => (
+              <li key={m.key}>
+                <button className="kort pam-rad" onClick={() => onVelg(m.key)}>
                   <span className="pam-rad-navn">
-                    <strong>{navnPa(a)}</strong>
-                    <span className="dempet">{a.arrangor}</span>
+                    <strong>{m.navn}</strong>
+                    <span className="dempet">
+                      {[...new Set(m.arrangementer.map(a => a.arrangor))].join(', ')}
+                      {m.arrangementer.length > 1 && ` · ${m.arrangementer.map(a => a.fane || a.tittel).join(', ')}`}
+                    </span>
                   </span>
-                  <span className={`status ${a.aapen ? 'bekreftet' : 'avlyst'}`}>{a.aapen ? 'Åpen' : 'Stengt'}</span>
-                  <span className="pam-antall"><strong>{a.antall ?? 0}</strong><span className="dempet">påmeldt</span></span>
+                  <span className={`status ${status(m) ? 'bekreftet' : 'avlyst'}`}>{status(m) ? 'Åpen' : 'Stengt'}</span>
+                  <span className="pam-antall"><strong>{m.antall}</strong><span className="dempet">påmeldt</span></span>
                 </button>
               </li>
             ))}
@@ -180,8 +203,38 @@ function Oversikt({ arrangementer, admin, meg, onVelg, onNy }: {
   );
 }
 
-function Detalj({ a, admin, onTilbake, onRediger, onEndret, setMelding }: {
-  a: Arrangement; admin: boolean; onTilbake: () => void; onRediger: () => void; onEndret: () => Promise<void>; setMelding: (m: Melding) => void;
+function MenyVisning({ meny, admin, del, setDel, onRediger, onNyDel, onEndret, setMelding }: {
+  meny: Meny; admin: boolean; del: string | null; setDel: (id: string) => void;
+  onRediger: (a: Arrangement) => void; onNyDel: () => void; onEndret: () => Promise<void>; setMelding: (m: Melding) => void;
+}) {
+  const a = meny.arrangementer.find(x => x.id === del) ?? meny.arrangementer[0];
+  return (
+    <>
+      <div className="adm-topp">
+        <h1>{meny.navn}</h1>
+        <span className="adm-handlinger pam-topp-knapper">
+          <button className="liten-knapp" onClick={() => { navigator.clipboard?.writeText(`${location.origin}/p/${meny.key}`); setMelding({ tekst: 'Lenken er kopiert.' }); }}>
+            <Link2 size={14} /> Kopier lenke
+          </button>
+          {admin && <button className="liten-knapp" onClick={onNyDel}><Plus size={14} /> Ny del</button>}
+        </span>
+      </div>
+      {meny.arrangementer.length > 1 && (
+        <div className="visning pam-deler" role="tablist">
+          {meny.arrangementer.map(x => (
+            <button key={x.id} role="tab" aria-selected={x.id === a.id} className={x.id === a.id ? 'aktiv' : ''} onClick={() => setDel(x.id)}>
+              {x.fane || x.tittel} <small>{x.antall ?? 0}</small>
+            </button>
+          ))}
+        </div>
+      )}
+      <Detalj key={a.id} a={a} admin={admin} onRediger={() => onRediger(a)} onEndret={onEndret} setMelding={setMelding} />
+    </>
+  );
+}
+
+function Detalj({ a, admin, onRediger, onEndret, setMelding }: {
+  a: Arrangement; admin: boolean; onRediger: () => void; onEndret: () => Promise<void>; setMelding: (m: Melding) => void;
 }) {
   const [svar, setSvar] = useState<Svar[] | null>(null);
   const [sok, setSok] = useState('');
@@ -208,39 +261,35 @@ function Detalj({ a, admin, onTilbake, onRediger, onEndret, setMelding }: {
     const r = await json('DELETE', `/api/pam/svar?arrangement=${a.id}&id=${s.id}`);
     setMelding(r.ok ? { tekst: `${hvem} er slettet.` } : { tekst: r.data.feil ?? 'Noe gikk galt.', feil: true });
     await last();
+    await onEndret();
   }
 
   async function settAapen(aapen: boolean) {
     const r = await json('POST', '/api/pam/arrangementer', { id: a.id, handling: 'aapen', aapen });
-    setMelding(r.ok ? { tekst: aapen ? 'Påmeldingen er åpnet.' : 'Påmeldingen er stengt. Ingen nye kan melde seg på.' } : { tekst: r.data.feil ?? 'Noe gikk galt.', feil: true });
+    setMelding(r.ok ? { tekst: aapen ? `${navnPa(a)} er åpnet.` : `${navnPa(a)} er stengt. Ingen nye kan melde seg på.` } : { tekst: r.data.feil ?? 'Noe gikk galt.', feil: true });
     await onEndret();
   }
 
   return (
     <>
-      <button className="lenke pam-tilbake" onClick={onTilbake}><ArrowLeft size={16} /> Alle påmeldinger</button>
-      <div className="adm-topp">
-        <h1>{navnPa(a)}</h1>
-        <span className={`status ${a.aapen ? 'bekreftet' : 'avlyst'}`}>{a.aapen ? 'Åpen' : 'Stengt'}</span>
-      </div>
       <div className="tall">
         <div className="tallkort"><span>Påmeldt</span><strong>{svar?.length ?? '–'}</strong></div>
+        <div className="tallkort"><span>Status</span><strong className={`pam-tall-tekst ${a.aapen ? 'pam-apen' : ''}`}>{a.aapen ? 'Åpen' : 'Stengt'}</strong></div>
         <div className="tallkort"><span>Arrangør</span><strong className="pam-tall-tekst">{a.arrangor}</strong></div>
       </div>
       <div className="adm-handlinger pam-verktoy">
-        <button className="liten-knapp" onClick={() => kopier(offentligLenke(a), 'Lenken er kopiert.')}><Link2 size={14} /> Kopier lenke</button>
-        <a className="liten-knapp" href={`/api/pam/eksport?arrangement=${a.id}`}><Download size={14} /> Last ned til Excel</a>
+        {svar && svar.length > 0 && <a className="liten-knapp" href={`/api/pam/eksport?arrangement=${a.id}`}><Download size={14} /> Last ned til Excel</a>}
         {eposter.length > 0 && (
           <button className="liten-knapp" onClick={() => kopier(eposter.join('; '), `${eposter.length} e-postadresser er kopiert. Lim dem inn i Bcc.`)}><Mail size={14} /> Kopier e-poster</button>
         )}
         {admin && <button className="liten-knapp" onClick={onRediger}><Pencil size={14} /> Rediger skjema</button>}
         {admin && (a.aapen
           ? <button className="liten-knapp fare" onClick={() => settAapen(false)}><Lock size={14} /> Steng påmeldingen</button>
-          : <button className="liten-knapp" onClick={() => settAapen(true)}>Åpne påmeldingen</button>)}
+          : <button className="liten-knapp primar" onClick={() => settAapen(true)}>Åpne påmeldingen</button>)}
       </div>
       {svar && svar.length > 0 && <input className="adm-sok" placeholder="Søk etter navn eller e-post" value={sok} onChange={e => setSok(e.target.value)} />}
       {!svar ? <div className="laster"><Loader2 className="spinn" size={18} /> Laster …</div>
-        : !svar.length ? <div className="kort tomt">Ingen har meldt seg på ennå.</div>
+        : !svar.length ? <div className="kort tomt">{a.aapen ? 'Ingen har meldt seg på ennå.' : 'Påmeldingen er stengt. Rediger skjemaet og åpne den når den er klar.'}</div>
         : (
           <div className="kort pam-tabell-kort">
             <table className="pam-tabell">
@@ -275,29 +324,28 @@ function Detalj({ a, admin, onTilbake, onRediger, onEndret, setMelding }: {
 }
 
 type Utkast = {
-  tittel: string; fane: string; arrangor: string; serie: string; slug: string; info: string; partner: string;
+  tittel: string; fane: string; arrangor: string; info: string; partner: string;
   felter: (Felt & { valgTekst?: string })[];
 };
 
-function Rediger({ a, alle, onAvbryt, onLagret }: {
-  a: Arrangement | null; alle: Arrangement[]; onAvbryt: () => void; onLagret: (id: string, tekst: string) => void;
+// Ny meny (uten a og meny), ny del i en meny (meny), eller endring (a).
+function Rediger({ a, meny, alle, onAvbryt, onLagret }: {
+  a: Arrangement | null; meny: Meny | null; alle: Arrangement[]; onAvbryt: () => void; onLagret: (id: string, tekst: string) => void;
 }) {
+  const mal = meny?.arrangementer[0];
   const [u, setU] = useState<Utkast>(() => a ? {
-    tittel: a.tittel, fane: a.fane ?? '', arrangor: a.arrangor, serie: a.serie ?? '', slug: a.slug, info: a.info ?? '', partner: a.partner ?? '',
+    tittel: a.tittel, fane: a.fane ?? '', arrangor: a.arrangor, info: a.info ?? '', partner: a.partner ?? '',
     felter: a.felter.map(f => ({ ...f, valgTekst: (f.valg ?? []).join('\n') })),
   } : {
-    tittel: '', fane: '', arrangor: '', serie: '', slug: '', info: '', partner: '',
-    felter: [
-      { id: 'navn', type: 'tekst', navn: 'Navn', pakrevd: true },
-      { id: 'epost', type: 'epost', navn: 'E-post', pakrevd: true },
-    ],
+    tittel: mal?.tittel ?? '', fane: '', arrangor: mal?.arrangor ?? '', info: '', partner: mal?.partner ?? '',
+    felter: STANDARDFELTER.map(f => ({ ...f })),
   });
   const [feil, setFeil] = useState('');
   const [sender, setSender] = useState(false);
   const harSvar = (a?.antall ?? 0) > 0;
+  const nyDel = !a && !!meny;
   const arrangorer = [...new Set(alle.map(x => x.arrangor))];
-  const serier = [...new Set(alle.map(x => x.serie).filter(Boolean))] as string[];
-  const forslag = lagSlug(u.fane ? `${u.tittel} ${u.fane}` : u.tittel);
+  const navn = [...new Set(alle.map(x => x.tittel))];
 
   const settFelt = (i: number, endring: Partial<Utkast['felter'][number]>) =>
     setU(x => ({ ...x, felter: x.felter.map((f, j) => (j === i ? { ...f, ...endring } : f)) }));
@@ -316,20 +364,28 @@ function Rediger({ a, alle, onAvbryt, onLagret }: {
       ...(f.type === 'valg' ? { valg: (valgTekst ?? '').split('\n').map(v => v.trim()).filter(Boolean) } : {}),
       ...(f.type === 'arskull' ? { fra: f.fra ?? new Date().getFullYear() - 18, til: f.til ?? new Date().getFullYear() - 5 } : {}),
     }));
-    const r = await json('POST', '/api/pam/arrangementer', { ...u, id: a?.id, slug: u.slug || forslag, felter });
+    // Ny meny er stengt til den er klar, så ingen melder seg på et halvferdig skjema.
+    const r = await json('POST', '/api/pam/arrangementer', { ...u, id: a?.id, slug: a?.slug, felter, ...(a ? {} : { aapen: nyDel }) });
     setSender(false);
-    if (r.ok) onLagret(r.data.id, a ? 'Endringene er lagret.' : 'Påmeldingen er laget. Kopier lenken og send den ut.');
+    if (r.ok) onLagret(r.data.id, a ? 'Endringene er lagret.' : nyDel ? 'Delen er lagt til og er åpen.' : `${u.tittel} er lagt til som meny. Påmeldingen er stengt til du åpner den.`);
     else setFeil(r.data.feil ?? 'Noe gikk galt.');
   }
 
   return (
     <>
       <button className="lenke pam-tilbake" onClick={onAvbryt}><ArrowLeft size={16} /> Avbryt</button>
-      <div className="adm-topp"><h1>{a ? 'Rediger påmelding' : 'Ny påmelding'}</h1></div>
+      <div className="adm-topp"><h1>{a ? `Rediger ${navnPa(a)}` : nyDel ? `Ny del i ${meny!.navn}` : 'Ny meny'}</h1></div>
       <form className="kort skjema pam-rediger" onSubmit={lagre}>
         <div className="to">
-          <label>Tittel<input required value={u.tittel} placeholder="F.eks. Start-turneen" onChange={e => setU({ ...u, tittel: e.target.value })} /></label>
-          <label>Del (valgfritt)<input value={u.fane} placeholder="F.eks. Trening" onChange={e => setU({ ...u, fane: e.target.value })} /></label>
+          {nyDel ? (
+            <label>Meny<input value={u.tittel} disabled /></label>
+          ) : (
+            <label>Navn på menyen
+              <input required list="pam-navn" value={u.tittel} placeholder="F.eks. Jentegolf" onChange={e => setU({ ...u, tittel: e.target.value })} />
+              <datalist id="pam-navn">{navn.map(x => <option key={x} value={x} />)}</datalist>
+            </label>
+          )}
+          <label>{nyDel ? 'Navn på delen' : 'Del (valgfritt)'}<input required={nyDel} autoFocus={nyDel} value={u.fane} placeholder="F.eks. Trening" onChange={e => setU({ ...u, fane: e.target.value })} /></label>
         </div>
         <div className="to">
           <label>Arrangør
@@ -343,16 +399,8 @@ function Rediger({ a, alle, onAvbryt, onLagret }: {
             </select>
           </label>
         </div>
-        <div className="to">
-          <label>Lenke<input value={u.slug} placeholder={forslag || 'lages fra tittelen'} onChange={e => setU({ ...u, slug: lagSlug(e.target.value) })} /></label>
-          <label>Samme side som (valgfritt)
-            <input list="pam-serier" value={u.serie} placeholder="F.eks. start-turneen" onChange={e => setU({ ...u, serie: lagSlug(e.target.value) })} />
-            <datalist id="pam-serier">{serier.map(x => <option key={x} value={x} />)}</datalist>
-          </label>
-        </div>
         <p className="dempet pam-hint">
-          Lenken blir <code>/p/{u.serie || u.slug || forslag || '…'}</code>.
-          {' '}Påmeldinger med samme «Samme side som» vises som faner på én side.
+          Lenken blir <code>/p/{lagSlug(u.tittel) || '…'}</code>. Deler i samme meny vises som faner på samme side.
         </p>
         <label>Tekst over skjemaet (valgfritt)<textarea rows={2} value={u.info} placeholder="F.eks. tid og sted" onChange={e => setU({ ...u, info: e.target.value })} /></label>
 
@@ -389,7 +437,7 @@ function Rediger({ a, alle, onAvbryt, onLagret }: {
           <Plus size={14} /> Legg til felt
         </button>
         {feil && <div className="banner feil">{feil}</div>}
-        <button className="knapp" disabled={sender}>{sender ? 'Lagrer …' : a ? 'Lagre endringer' : 'Lag påmelding'}</button>
+        <button className="knapp" disabled={sender}>{sender ? 'Lagrer …' : a ? 'Lagre endringer' : nyDel ? 'Legg til delen' : 'Lag menyen'}</button>
       </form>
     </>
   );

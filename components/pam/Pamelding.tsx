@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
 import { PARTNERE, arskullFor, lagSlug, sjekkSvar, type Arrangement, type Felt } from '@/lib/pam/felter';
 
-const fanenokkel = (a: Arrangement) => lagSlug(a.fane ?? a.slug);
+const fanenokkel = (a: Arrangement) => lagSlug(a.fane || a.slug);
 
 export function Pamelding({ slug, arrangementer }: { slug: string; arrangementer: Arrangement[] }) {
   const [aktiv, setAktiv] = useState(arrangementer[0].id);
@@ -48,7 +48,7 @@ export function Pamelding({ slug, arrangementer }: { slug: string; arrangementer
           <div className="visning" role="tablist">
             {arrangementer.map(x => (
               <button key={x.id} role="tab" aria-selected={x.id === a.id} className={x.id === a.id ? 'aktiv' : ''} onClick={() => velg(x)}>
-                {x.fane ?? x.tittel}
+                {x.fane || x.tittel}
               </button>
             ))}
           </div>

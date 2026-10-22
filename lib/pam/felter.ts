@@ -44,9 +44,33 @@ export const PARTNERE: Record<string, { navn: string; logo: string }> = {
   start: { navn: 'IK Start', logo: '/partnere/start.png' },
 };
 
+export const STANDARDFELTER: Felt[] = [
+  { id: 'navn', type: 'tekst', navn: 'Navn', pakrevd: true },
+  { id: 'epost', type: 'epost', navn: 'E-post', pakrevd: true },
+  { id: 'telefon', type: 'telefon', navn: 'Telefon', pakrevd: false },
+];
+
 const EPOST = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export const navnPa = (a: Pick<Arrangement, 'tittel' | 'fane'>) => (a.fane ? `${a.tittel} – ${a.fane}` : a.tittel);
+
+// En meny i backoffice samler påmeldingene med samme navn (f.eks. Start-turneen
+// med trening og seminar). De vises også som faner på én offentlig side.
+export type Meny = { key: string; navn: string; arrangementer: Arrangement[]; antall: number };
+
+export const menyAv = (a: Pick<Arrangement, 'serie' | 'slug'>) => a.serie ?? a.slug;
+
+export function menyer(alle: Arrangement[]): Meny[] {
+  const ut = new Map<string, Meny>();
+  for (const a of alle) {
+    const m = ut.get(menyAv(a)) ?? { key: menyAv(a), navn: a.tittel, arrangementer: [], antall: 0 };
+    m.arrangementer.push(a);
+    m.antall += a.antall ?? 0;
+    ut.set(m.key, m);
+  }
+  for (const m of ut.values()) m.arrangementer.sort((a, b) => a.rekkefolge - b.rekkefolge || a.opprettet.localeCompare(b.opprettet));
+  return [...ut.values()].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+}
 
 export function lagSlug(tekst: string): string {
   return tekst.toLowerCase()

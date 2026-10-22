@@ -635,3 +635,19 @@ main.innhold > h1 { font-size: 2.3rem; line-height: 1.08; color: var(--gronn); f
 .pam-arrangorvalg { display: grid; gap: 6px; }
 .pam-annen { display: flex; gap: 6px; align-items: center; }
 .pam-annen input { flex: 1; max-width: 240px; }
+
+/* Påmeldinger: en meny per satsing */
+.pam-menytittel { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dempet); padding: 14px 10px 4px; }
+.adm-meny .pam-menyknapp { font-weight: 500; }
+.pam-menynavn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pam-teller { font-size: 0.72rem; font-weight: 700; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--sand); color: var(--gronn); display: grid; place-items: center; }
+.adm-meny .pam-nymeny { color: var(--gronn); margin-bottom: 10px; }
+.pam-topp-knapper { margin-top: 0; }
+.pam-deler { margin-bottom: 14px; }
+.pam-deler small { font-size: 0.75rem; color: var(--dempet); font-weight: 500; margin-left: 4px; }
+.pam-apen { color: var(--gronn); }
+.adm-meny nav { overflow-y: auto; }
+@media (max-width: 760px) {
+  .pam-menytittel, .adm-meny .pam-menyknapp { display: none; }
+  .adm-topp { flex-wrap: wrap; }
+}

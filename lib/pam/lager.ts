@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { erDemo, rpc } from '../lager';
-import type { Arrangement, Svar } from './felter';
+import { STANDARDFELTER, lagSlug, type Arrangement, type Svar } from './felter';
 
 // Lagring for påmeldinger: databasefunksjonene i supabase/pameldinger.sql,
 // eller minne i demo-modus (samme grensesnitt).
@@ -44,6 +44,13 @@ function demo(): Demo {
     brukere: [],
     logg: [],
   };
+  // Menyer som ikke er satt opp ennå: stengte utkast med standardfelter.
+  for (const [i, tittel] of ['Finns.Fairway Cup', 'Jentegolf', 'Frivillig'].entries()) {
+    g.__pam.arrangementer.push({
+      id: randomUUID(), slug: lagSlug(tittel), serie: lagSlug(tittel), tittel, fane: null, arrangor: 'Finns.Fairway',
+      info: null, partner: null, aapen: false, rekkefolge: i, opprettet: naa, felter: STANDARDFELTER,
+    });
+  }
   return g.__pam;
 }
 
@@ -56,16 +63,18 @@ export async function hentArrangementer(): Promise<Arrangement[]> {
   return rader.map(r => ({ ...r, antall: Number(r.antall) }));
 }
 
-// Arrangementet med denne sluggen, eller alle i serien.
+// Alle påmeldingene i menyen, eller den ene med denne lenken.
 export async function hentForSide(slug: string): Promise<Arrangement[]> {
   const alle = await hentArrangementer();
-  const ett = alle.find(a => a.slug === slug);
-  if (ett) return [ett];
-  return alle.filter(a => a.serie === slug).sort((a, b) => a.rekkefolge - b.rekkefolge);
+  const meny = alle.filter(a => a.serie === slug).sort((a, b) => a.rekkefolge - b.rekkefolge);
+  if (meny.length) return meny;
+  return alle.filter(a => a.slug === slug);
 }
 
 export async function lagreArrangement(a: Partial<Arrangement>): Promise<string> {
   if (erDemo()) {
+    // Som i databasen: tom tekst blir null.
+    for (const k of ['serie', 'fane', 'info', 'partner'] as const) if (a[k] === '') a = { ...a, [k]: null };
     const d = demo();
     const finnes = d.arrangementer.find(x => x.id === a.id);
     if (finnes) {

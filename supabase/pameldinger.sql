@@ -208,3 +208,18 @@ insert into pam_arrangementer (slug, serie, tittel, fane, arrangor, felter, part
    '[{"id":"navn","type":"tekst","navn":"Deltakers navn","pakrevd":true},
      {"id":"epost","type":"epost","navn":"Deltakers e-post","pakrevd":true}]', 'start', 2)
 on conflict (slug) do nothing;
+
+-- Menyer som settes opp senere: stengte utkast med standardfelter.
+insert into pam_arrangementer (slug, serie, tittel, arrangor, felter, aapen) values
+  ('finns-fairway-cup', 'finns-fairway-cup', 'Finns.Fairway Cup', 'Finns.Fairway', '[{"id":"navn","type":"tekst","navn":"Navn","pakrevd":true},{"id":"epost","type":"epost","navn":"E-post","pakrevd":true},{"id":"telefon","type":"telefon","navn":"Telefon","pakrevd":false}]', false),
+  ('jentegolf', 'jentegolf', 'Jentegolf', 'Finns.Fairway', '[{"id":"navn","type":"tekst","navn":"Navn","pakrevd":true},{"id":"epost","type":"epost","navn":"E-post","pakrevd":true},{"id":"telefon","type":"telefon","navn":"Telefon","pakrevd":false}]', false),
+  ('frivillig', 'frivillig', 'Frivillig', 'Finns.Fairway', '[{"id":"navn","type":"tekst","navn":"Navn","pakrevd":true},{"id":"epost","type":"epost","navn":"E-post","pakrevd":true},{"id":"telefon","type":"telefon","navn":"Telefon","pakrevd":false}]', false)
+on conflict (slug) do nothing;
+
+create or replace function pam_slett_svar(p_nokkel text, p_id uuid) returns void
+language plpgsql security definer set search_path = public as $fn$
+begin
+  perform snak_sjekk(p_nokkel);
+  delete from pam_svar where id = p_id;
+end
+$fn$;

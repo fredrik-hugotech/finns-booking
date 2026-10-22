@@ -83,14 +83,16 @@ Admin er bygget som admin i mer.golf: sidemeny på PC, fanelinje nederst på mob
 
 ## Påmeldinger (`/p/...` og `/pameldinger`)
 
-Påmeldingsskjemaer for arrangementer, som Start-turneen. Hvert skjema har sin
-egen lenke, for eksempel `/p/start-turneen` (trening og seminar som faner).
+Påmeldinger for alt Finns.Fairway arrangerer: Start-turneen, Finns.Fairway Cup,
+Jentegolf, frivillige og så videre. Hver satsing er en egen meny i backoffice,
+med en eller flere deler (for eksempel trening og seminar). Hver meny har sin
+egen lenke, for eksempel `/p/start-turneen`, der delene vises som faner.
 
 Backoffice på **`/pameldinger`** har egne brukere og egen innlogging, helt
 adskilt fra banebookingen:
 
-- **Admin** lager og endrer skjemaer, åpner og stenger påmeldinger, og gir
-  tilgang.
+- **Admin** lager nye menyer og deler med egne felter, åpner og stenger
+  påmeldinger, og gir tilgang. En ny meny er stengt til den åpnes.
 - **Arrangør** ser bare påmeldingene til sine arrangører (for eksempel
   «IK Start»), kan søke, laste ned til Excel, kopiere alle e-postadresser og
   slette en påmelding.
