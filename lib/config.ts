@@ -11,7 +11,7 @@ export const SESONG = {
   navn: 'Vinteråpen arena 2026/27',
   // Første og siste dag det kan bookes (begge inklusive), YYYY-MM-DD.
   fra: '2026-12-01',
-  til: '2027-02-28',
+  til: '2027-03-31',
 };
 
 // Bookbare timer: første time starter 08:00, siste time er 22:00–23:00.
