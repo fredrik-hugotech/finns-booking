@@ -1,0 +1,30 @@
+import { NextResponse } from 'next/server';
+import { OKT_COOKIE, innlogget, lagOkt, loggInn, oktValg } from '@/lib/tilgang';
+import { markerInne, skrivLogg } from '@/lib/lager';
+
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: Request) {
+  const { epost, passord } = await req.json().catch(() => ({}));
+  const b = typeof epost === 'string' && typeof passord === 'string' ? await loggInn(epost, passord) : null;
+  if (!b) {
+    await skrivLogg({ navn: typeof epost === 'string' ? epost.trim().toLowerCase().slice(0, 160) || 'ukjent' : 'ukjent' }, 'Mislykket innlogging');
+    // Litt ventetid gjør gjetting av passord tregere.
+    await new Promise(r => setTimeout(r, 600));
+    return NextResponse.json({ feil: 'Feil e-post eller passord.' }, { status: 401 });
+  }
+  await markerInne(b.id).catch(() => {});
+  await skrivLogg(b, 'Logget inn');
+  const { verdi, maxAge } = lagOkt(b.id, b.passord_hash);
+  const res = NextResponse.json({ ok: true });
+  res.cookies.set(OKT_COOKIE, verdi, oktValg(maxAge));
+  return res;
+}
+
+export async function DELETE() {
+  const meg = await innlogget();
+  if (meg) await skrivLogg(meg, 'Logget ut');
+  const res = NextResponse.json({ ok: true });
+  res.cookies.delete(OKT_COOKIE);
+  return res;
+}
