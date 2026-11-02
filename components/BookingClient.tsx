@@ -4,10 +4,10 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
 import { ARENA, SESONG, STANDARD_PRIS, type Priser } from '@/lib/config';
 import {
-  TIMER, erHelg, halvdeler, halvslot, klokke, slot, startAv, varighet, type Bane, type Belegg,
+  HALVTIMER, TIMER, erHelg, halvdeler, halvslot, klokke, ledigIntervall, slot, startAv, varighet, type Bane, type Belegg,
 } from '@/lib/tilgjengelighet';
 import {
-  dagOgManed, dagnavn, datoer, kr, langDato, leggTilDager, mandagI, ukedag, ukenummer,
+  dagOgManed, dagnavn, datoer, kr, langDato, leggTilDager, mandagI, minutter, ukedag, ukenummer,
 } from '@/lib/dato';
 import { Retningslinjer } from './Retningslinjer';
 import { PrisKontekst, usePris } from './Priser';
@@ -98,12 +98,12 @@ function brikke(d: string, iDag: string) {
   return { tekst, dato: `${Number(d.slice(8))}.${Number(d.slice(5, 7))}.` };
 }
 
-// Tidslinje for én dag: ledige timer og halvtimer enkeltvis, det som er
-// opptatt slått sammen. Tider i minutter etter midnatt.
+// Tidslinje: ledige tider enkeltvis, det som er opptatt slått sammen.
+// Tider i minutter etter midnatt.
 type Rad =
-  | { type: 'ledig'; time: number }
-  | { type: 'halv'; start: number }
+  | { type: 'ledig'; start: number; lengde: number }
   | { type: 'opptatt'; fra: number; til: number; tekst: string };
+type Fast = { start: number; lengde: number; hel: string[]; halv: string[]; kommende: string[] };
 
 function leggOpptatt(rader: Rad[], fra: number, til: number, tekst: string) {
   const forrige = rader[rader.length - 1];
@@ -111,11 +111,62 @@ function leggOpptatt(rader: Rad[], fra: number, til: number, tekst: string) {
   else rader.push({ type: 'opptatt', fra, til, tekst });
 }
 
-function byggRader(erLedig: (t: number) => boolean, grunn: (t: number) => string): Rad[] {
+// Minste booking er 1 time. En halvtime kan bare legges til en time rett før
+// eller etter (1,5 timer, 2,5 timer …). Valg som bryter regelen ryddes bort:
+// sammenhengende tider samme dag må til sammen bli minst 60 minutter.
+function ryddHalvtimer(valg: Valgt[]): Valgt[] {
+  const ut: Valgt[] = [];
+  let blokk: Valgt[] = [];
+  const lukk = () => {
+    if (blokk.reduce((n, v) => n + v.lengde, 0) >= 60) ut.push(...blokk);
+    else ut.push(...blokk.filter(v => v.lengde >= 60));
+    blokk = [];
+  };
+  for (const v of sorter(valg)) {
+    const siste = blokk[blokk.length - 1];
+    if (siste && (siste.dato !== v.dato || startAv(siste) + siste.lengde !== startAv(v))) lukk();
+    blokk.push(v);
+  }
+  lukk();
+  return ut;
+}
+
+// Del dagen i rader. Hvert sammenhengende ledige tidsrom deles i hele timer.
+// Går det opp, deles det fra starten (09:30–10:30). Blir det en halvtime til
+// overs, legges den der resten treffer hele klokketimer: 20:30–23 blir
+// 20:30–21, 21–22, 22–23, og 08–10:30 blir 08–09, 09–10, 10–10:30.
+// En halvtime med opptatt tid på begge sider kan ikke bookes. Tider kunden
+// alt har valgt, vises med den lengden de ble valgt med.
+function delInn(kap: (s: number) => number, grunn: (s: number) => string, valgtLengde?: (s: number) => number | undefined, valgtDekker?: (s: number) => boolean): Rad[] {
   const rader: Rad[] = [];
-  for (const t of TIMER) {
-    if (erLedig(t)) rader.push({ type: 'ledig', time: t });
-    else leggOpptatt(rader, t * 60, t * 60 + 60, grunn(t));
+  const H = HALVTIMER;
+  for (let i = 0; i < H.length;) {
+    const valgt = valgtLengde?.(H[i]);
+    if (valgt) {
+      rader.push({ type: 'ledig', start: H[i], lengde: valgt });
+      i += valgt / 30;
+      continue;
+    }
+    if (kap(H[i]) <= 0) {
+      leggOpptatt(rader, H[i], H[i] + 30, grunn(H[i]));
+      i++;
+      continue;
+    }
+    // Finn slutten på det ledige tidsrommet (stopper ved en valgt tid).
+    let j = i + 1;
+    while (j < H.length && kap(H[j]) > 0 && !valgtLengde?.(H[j])) j++;
+    const n = j - i;
+    const slutt = H[i] + n * 30;
+    if (n === 1 && !valgtDekker?.(H[i] - 30) && !valgtDekker?.(slutt)) {
+      leggOpptatt(rader, H[i], slutt, 'Bare 30 min ledig');
+      i = j;
+      continue;
+    }
+    let s = H[i];
+    if (n % 2 === 1 && s % 60 === 30) { rader.push({ type: 'ledig', start: s, lengde: 30 }); s += 30; }
+    for (; s + 60 <= slutt; s += 60) rader.push({ type: 'ledig', start: s, lengde: 60 });
+    if (s < slutt) rader.push({ type: 'ledig', start: s, lengde: 30 });
+    i = j;
   }
   return rader;
 }
@@ -220,33 +271,46 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
   const minutterIgjen = holdtTil && valgt.length ? Math.max(0, Math.ceil((holdtTil - Date.now()) / 60_000)) : null;
 
   const iDag = na?.dato ?? SESONG.fra;
-  // Antall ledige halvdeler: 2 = hel bane ledig, 1 = bare halv bane.
-  const kapasitet = (d: string, t: number) => (belegg && na ? slot(d, t, belegg, na).ledigeHalvdeler : 0);
+  // Ledige halvdeler per halvtime: 2 = hel bane ledig, 1 = bare halv bane.
   const halvKap = (d: string, start: number) => (belegg && na ? halvslot(d, start, belegg, na).ledigeHalvdeler : 0);
-  const antallLedige = (d: string) => TIMER.filter(t => halvKap(d, t * 60) > 0 || halvKap(d, t * 60 + 30) > 0).length;
-  // Timer der kunden har valgt å se halvtimene hver for seg.
-  const [delt, setDelt] = useState<Set<string>>(new Set());
+  const intervallKap = (d: string, start: number, lengde: number) => (belegg && na ? ledigIntervall(d, start, lengde, belegg, na) : 0);
+  const antallLedige = (d: string) => HALVTIMER.filter(s => halvKap(d, s) > 0).length;
 
-  // Faste tider: for hver ukedag og time, hvilke gjenværende uker som har hel/halv bane ledig.
+  // Faste tider. Ukemønsteret (klubbtidene, uten enkeltdager som er frigitt)
+  // gir de ledige tidsrommene for hver ukedag, delt inn på samme måte som en
+  // enkeltdag. For hvert tidsrom telles ukene der hel og halv bane er ledig.
+  // Bare tider som er ledige minst halvparten av ukene, er faste tider; resten
+  // finnes under Enkelttimer.
   const faste = useMemo(() => {
-    const ut = new Map<string, { hel: string[]; halv: string[]; kommende: string[] }>();
+    const ut = new Map<number, { rader: Rad[]; data: Map<number, Fast> }>();
     if (!belegg || !na) return ut;
     for (let d = 1; d <= 7; d++) {
-      const dagens = ALLE_DATOER.filter(x => ukedag(x) === d);
-      for (const t of TIMER) {
-        const kommende = dagens.filter(x => slot(x, t, belegg, na).tilstand !== 'passert');
-        const halv = kommende.filter(x => slot(x, t, belegg, na).ledigeHalvdeler >= 1);
-        const hel = kommende.filter(x => slot(x, t, belegg, na).ledigeHalvdeler === 2);
-        if (halv.length >= 2) ut.set(`${d}|${t}`, { hel, halv, kommende });
+      const monster = (s: number) => 2 - Math.min(2, belegg.klubbtider
+        .filter(k => k.dag === d && minutter(k.fra) <= s && minutter(k.til) > s)
+        .reduce((n, k) => n + halvdeler(k.bane), 0));
+      const dager = ALLE_DATOER.filter(x => ukedag(x) === d);
+      const rader: Rad[] = [];
+      const data = new Map<number, Fast>();
+      for (const r of delInn(monster, () => 'Opptatt')) {
+        if (r.type === 'opptatt') { leggOpptatt(rader, r.fra, r.til, r.tekst); continue; }
+        const kommende = dager.filter(x => !['passert', 'utenfor'].includes(halvslot(x, r.start, belegg, na).tilstand));
+        const halv = kommende.filter(x => ledigIntervall(x, r.start, r.lengde, belegg, na) >= 1);
+        const hel = kommende.filter(x => ledigIntervall(x, r.start, r.lengde, belegg, na) === 2);
+        if (halv.length >= 2 && halv.length * 2 >= kommende.length) {
+          rader.push(r);
+          data.set(r.start, { start: r.start, lengde: r.lengde, hel, halv, kommende });
+        } else {
+          leggOpptatt(rader, r.start, r.start + r.lengde, 'Ikke ledig hver uke');
+        }
       }
+      ut.set(d, { rader, data });
     }
     return ut;
   }, [belegg, na]);
 
   const sum = valgt.reduce((s, v) => s + prisFor(v.bane, v.dato, v.lengde), 0);
-  // Hel time valgt på dagen, og valg som starter på en bestemt halvtime.
-  const valgtPaa = (d: string, t: number) => valgt.find(v => v.dato === d && v.time === t && v.minutt === 0 && v.lengde === 60);
-  const valgtHalv = (d: string, start: number) => valgt.find(v => v.dato === d && startAv(v) === start && v.lengde === 30);
+  const valgtPaa = (d: string, start: number, lengde: number) =>
+    valgt.find(v => v.dato === d && startAv(v) === start && v.lengde === lengde);
 
   // Samme knapp igjen fjerner tida, den andre banestørrelsen bytter.
   // Et nytt valg erstatter det som overlapper samme tid.
@@ -255,15 +319,16 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
       const ny = lagValg(d, start, lengde, bane);
       const lik = prev.find(v => v.dato === d && startAv(v) === start && v.lengde === lengde);
       const uten = prev.filter(v => !overlapper(v, ny));
-      return lik?.bane === bane ? uten : sorter([...uten, ny]);
+      return ryddHalvtimer(lik?.bane === bane ? uten : [...uten, ny]);
     });
   }
 
-  function velgFast(ds: string[], t: number, bane: Bane) {
+  function velgFast(ds: string[], start: number, lengde: number, bane: Bane) {
     setValgt(prev => {
-      const alle = ds.every(d => prev.some(v => v.dato === d && v.time === t && v.lengde === 60 && v.bane === bane));
-      const uten = prev.filter(v => !(v.time === t && ukedag(v.dato) === ukedag(ds[0])));
-      return alle ? uten : sorter([...uten, ...ds.map(d => lagValg(d, t * 60, 60, bane))]);
+      const alle = ds.every(d => prev.some(v => v.dato === d && startAv(v) === start && v.lengde === lengde && v.bane === bane));
+      const dag = ukedag(ds[0]);
+      const uten = prev.filter(v => !(ukedag(v.dato) === dag && startAv(v) < start + lengde && start < startAv(v) + v.lengde));
+      return ryddHalvtimer(alle ? uten : [...uten, ...ds.map(d => lagValg(d, start, lengde, bane))]);
     });
   }
 
@@ -287,12 +352,14 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
   const sisteMandag = mandagI(SESONG.til);
 
   // Forslag for en uke der den faste tida er tatt: halv bane samme tid,
-  // ellers nærmeste ledige time samme dag med samme banestørrelse.
-  function alternativ(d: string, t: number, b: Bane): { time: number; bane: Bane } | null {
-    if (b === 'hel' && kapasitet(d, t) >= 1) return { time: t, bane: 'halv' };
-    for (const dt of [1, -1, 2, -2]) {
-      const tt = t + dt;
-      if (TIMER.includes(tt) && kapasitet(d, tt) >= halvdeler(b)) return { time: tt, bane: b };
+  // ellers nærmeste ledige tid samme dag med samme lengde og banestørrelse.
+  function alternativ(d: string, start: number, lengde: number, b: Bane): { start: number; bane: Bane } | null {
+    if (b === 'hel' && intervallKap(d, start, lengde) >= 1) return { start, bane: 'halv' };
+    for (const dt of [60, -60, 30, -30, 120, -120]) {
+      const s = start + dt;
+      if (HALVTIMER.includes(s) && s + lengde <= HALVTIMER[HALVTIMER.length - 1] + 30 && intervallKap(d, s, lengde) >= halvdeler(b)) {
+        return { start: s, bane: b };
+      }
     }
     return null;
   }
@@ -304,48 +371,20 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
     setDag(ny.find(d => antallLedige(d) > 0) ?? ny[0] ?? dag);
   }
 
-  const grunn = (d: string) => (t: number) => {
-    if (!belegg || !na) return '';
-    const s = slot(d, t, belegg, na);
-    return s.tilstand === 'stengt' ? s.tekst ?? 'Stengt' : '';
-  };
-
   const fastDato = ALLE_DATOER.find(x => ukedag(x) === fastDag)!;
+  const fastDag_ = faste.get(fastDag);
 
-  // Enkelttimer: hel time når begge halvtimene er ledige; ellers den ledige
-  // halvtimen alene. Kunden kan også dele en ledig time i to halvtimer.
-  const halvGrunn = (d: string, start: number) => {
-    if (!belegg || !na) return '';
-    const s = halvslot(d, start, belegg, na);
-    return s.tilstand === 'stengt' ? s.tekst ?? 'Stengt' : '';
+  // Enkelttimer: ledig tid delt i timer fra der den starter, og en halvtime
+  // til slutt hvis det er det som er igjen. Valgte tider beholder sin lengde.
+  const grunn = (d: string) => (s: number) => {
+    if (!belegg || !na) return 'Opptatt';
+    const h = halvslot(d, s, belegg, na);
+    return h.tilstand === 'stengt' ? h.tekst ?? 'Stengt' : h.tilstand === 'passert' ? 'Passert' : 'Opptatt';
   };
-  function dagsRader(d: string): Rad[] {
-    const rader: Rad[] = [];
-    for (const t of TIMER) {
-      const [a, b] = [t * 60, t * 60 + 30];
-      const harHalv = valgtHalv(d, a) || valgtHalv(d, b);
-      const hel = (halvKap(d, a) > 0 && halvKap(d, b) > 0) || !!valgtPaa(d, t);
-      if (hel && !harHalv && !delt.has(`${d}|${t}`)) { rader.push({ type: 'ledig', time: t }); continue; }
-      for (const s of [a, b]) {
-        if (halvKap(d, s) > 0 || valgtHalv(d, s)) rader.push({ type: 'halv', start: s });
-        else leggOpptatt(rader, s, s + 30, halvGrunn(d, s));
-      }
-    }
-    return rader;
-  }
-  function delTime(d: string, t: number, del: boolean) {
-    setDelt(prev => {
-      const ny = new Set(prev);
-      if (del) ny.add(`${d}|${t}`); else ny.delete(`${d}|${t}`);
-      return ny;
-    });
-    // Valget for timen gjelder ikke lenger når den deles eller slås sammen.
-    setValgt(prev => prev.filter(v => !(v.dato === d && v.time === t)));
-  }
-
   const rader = visning === 'enkelt'
-    ? dagsRader(dag)
-    : byggRader(t => faste.has(`${fastDag}|${t}`), () => '');
+    ? delInn(s => halvKap(dag, s), grunn(dag), s => valgt.find(v => v.dato === dag && startAv(v) === s)?.lengde,
+      s => valgt.some(v => v.dato === dag && startAv(v) <= s && s < startAv(v) + v.lengde))
+    : fastDag_?.rader ?? [];
 
   return (
     <Ramme>
@@ -357,6 +396,11 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
         <button role="tab" aria-selected={visning === 'enkelt'} className={visning === 'enkelt' ? 'aktiv' : ''} onClick={() => setVisning('enkelt')}>Enkelttimer</button>
         <button role="tab" aria-selected={visning === 'fast'} className={visning === 'fast' ? 'aktiv' : ''} onClick={() => setVisning('fast')}>Fast hver uke</button>
       </div>
+      <p className="hjelp">
+        {visning === 'enkelt'
+          ? 'Velg dag og tid. Minst 1 time; en halvtime kan legges til rett før eller etter.'
+          : 'Samme tid hver uke ut sesongen. Uker der tida er opptatt, får du forslag til en annen tid.'}
+      </p>
 
       {!belegg ? (
         <p className="laster"><Loader2 className="spinn" size={18} /> Henter ledige tider</p>
@@ -384,26 +428,24 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
                   );
                 })}
               </div>
-              <h2 className="valgt-dag">{langDato(dag)}</h2>
             </>
           ) : (
-            <>
-              <div className="dagstripe">
-                {DAGER.map((n, i) => {
-                  const d = i + 1;
-                  const har = TIMER.some(t => faste.has(`${d}|${t}`));
-                  return (
-                    <button key={n} className={`dagbrikke ${d === fastDag ? 'valgt' : ''} ${d >= 6 ? 'helg' : ''}`}
-                      disabled={!har} onClick={() => setFastDag(d)}>
-                      <span className="dagbrikke-dato">{n}</span>
-                      {valgt.some(v => ukedag(v.dato) === d) && <span className="prikk" />}
-                    </button>
-                  );
-                })}
-              </div>
-              <h2 className="valgt-dag">{stor(dagnavn(fastDato))}er resten av sesongen</h2>
-            </>
+            <div className="dagstripe">
+              {DAGER.map((n, i) => {
+                const d = i + 1;
+                const har = (faste.get(d)?.data.size ?? 0) > 0;
+                return (
+                  <button key={n} className={`dagbrikke ${d === fastDag ? 'valgt' : ''} ${d >= 6 ? 'helg' : ''}`}
+                    disabled={!har} onClick={() => setFastDag(d)}>
+                    <span className="dagbrikke-dato">{n}</span>
+                    {valgt.some(v => ukedag(v.dato) === d) && <span className="prikk" />}
+                  </button>
+                );
+              })}
+            </div>
           )}
+
+          <h2 className="valgt-dag">{visning === 'enkelt' ? langDato(dag) : `${stor(dagnavn(fastDato))}er resten av sesongen`}</h2>
 
           <div className="tidslinje">
             {rader.map(r => {
@@ -415,42 +457,38 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
                   </div>
                 );
               }
-              if (r.type === 'halv') {
-                const s = r.start;
-                const t = Math.floor(s / 60);
-                const iDelt = halvKap(dag, t * 60) > 0 && halvKap(dag, t * 60 + 30) > 0 && s % 60 === 0;
-                return (
-                  <Tidsrad key={`h${s}`} tid={tidKort(s, s + 30)} under={iDelt ? undefined : '30 min'} dato={dag} lengde={30}
-                    kanHel={halvKap(dag, s) === 2 || valgtHalv(dag, s)?.bane === 'hel'}
-                    valgt={valgtHalv(dag, s)?.bane} onVelg={b => velg(dag, s, 30, b)}
-                    lenke={iDelt ? { tekst: 'Hele timen', onClick: () => delTime(dag, t, false) } : undefined} />
-                );
-              }
-              const t = r.time;
+              const { start, lengde } = r;
+              // En halvtime kan bare velges når tida rett før eller etter er valgt.
+              const vedSiden = (datoer: string[]) => valgt.some(v => datoer.includes(v.dato)
+                && (startAv(v) + v.lengde === start || startAv(v) === start + lengde));
+              const under = lengde === 30 ? 'Bare som tillegg til en time' : undefined;
               if (visning === 'fast') {
-                const f = faste.get(`${fastDag}|${t}`)!;
+                const f = fastDag_!.data.get(start)!;
                 const valgtBane = (['hel', 'halv'] as Bane[]).find(b => {
                   const ds = b === 'hel' ? f.hel : f.halv;
-                  return ds.length > 0 && ds.every(x => valgtPaa(x, t)?.bane === b);
+                  return ds.length > 0 && ds.every(x => valgtPaa(x, start, lengde)?.bane === b);
                 });
-                const tatt = valgtBane ? f.kommende.filter(x => !(valgtBane === 'hel' ? f.hel : f.halv).includes(x)) : [];
+                const ikke = valgtBane ? f.kommende.filter(x => !(valgtBane === 'hel' ? f.hel : f.halv).includes(x)) : [];
+                const uker = `Ledig ${f.halv.length} av ${f.kommende.length} uker`;
                 return (
-                  <Fragment key={t}>
-                    <Tidsrad tid={kl(t)} under={f.hel.length >= 2 && f.hel.length < f.halv.length ? `hel ${f.hel.length}, halv ${f.halv.length} av ${f.kommende.length} uker` : `${f.halv.length} av ${f.kommende.length} uker`} dato={fastDato}
+                  <Fragment key={start}>
+                    <Tidsrad tid={tidKort(start, start + lengde)} dato={fastDato} lengde={lengde}
+                      under={[under, f.hel.length >= 2 && f.hel.length < f.halv.length ? `${uker} · hel bane ${f.hel.length}` : uker].filter(Boolean).join(' · ')}
+                      lukket={lengde === 30 && !valgtBane && !vedSiden(f.kommende)}
                       kanHel={f.hel.length >= 2} valgt={valgtBane}
-                      onVelg={b => velgFast(b === 'hel' ? f.hel : f.halv, t, b)} />
-                    {tatt.length > 0 && (
+                      onVelg={b => velgFast(b === 'hel' ? f.hel : f.halv, start, lengde, b)} />
+                    {ikke.length > 0 && (
                       <div className="tl-avvik">
-                        {tatt.map(x => {
-                          const a = alternativ(x, t, valgtBane!);
-                          const stengt = belegg && na ? slot(x, t, belegg, na).tilstand === 'stengt' : false;
-                          const pa = a ? valgtPaa(x, a.time)?.bane === a.bane : false;
+                        {ikke.map(x => {
+                          const a = alternativ(x, start, lengde, valgtBane!);
+                          const stengt = belegg && na ? halvslot(x, start, belegg, na).tilstand === 'stengt' : false;
+                          const pa = a ? valgtPaa(x, a.start, lengde)?.bane === a.bane : false;
                           return (
                             <div key={x} className="avvik-rad">
                               <span>{dagOgManed(x, true)} {stengt ? 'stengt' : 'opptatt'}</span>
                               {a && !stengt ? (
-                                <button className={pa ? 'pa' : ''} aria-pressed={pa} onClick={() => velg(x, a.time * 60, 60, a.bane)}>
-                                  {pa && <Check size={13} />} {a.time === t ? 'Halv bane' : kl(a.time)}{a.time !== t && a.bane === 'halv' ? ' halv' : ''} <small>{kr(prisFor(a.bane, x))}</small>
+                                <button className={pa ? 'pa' : ''} aria-pressed={pa} onClick={() => velg(x, a.start, lengde, a.bane)}>
+                                  {pa && <Check size={13} />} {a.start === start ? 'Halv bane' : tidKort(a.start, a.start + lengde)}{a.start !== start && a.bane === 'halv' ? ' halv' : ''} <small>{kr(prisFor(a.bane, x, lengde))}</small>
                                 </button>
                               ) : <span className="dempet-tekst">{stengt ? '' : 'ingen annen tid'}</span>}
                             </div>
@@ -461,10 +499,12 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
                   </Fragment>
                 );
               }
+              const mitt = valgtPaa(dag, start, lengde);
               return (
-                <Tidsrad key={t} tid={kl(t)} dato={dag} lengde={60} kanHel={kapasitet(dag, t) === 2 || valgtPaa(dag, t)?.bane === 'hel'}
-                  valgt={valgtPaa(dag, t)?.bane} onVelg={b => velg(dag, t * 60, 60, b)}
-                  lenke={{ tekst: 'Del i halvtimer', onClick: () => delTime(dag, t, true) }} />
+                <Tidsrad key={start} tid={tidKort(start, start + lengde)} under={under} dato={dag} lengde={lengde}
+                  lukket={lengde === 30 && !mitt && !vedSiden([dag])}
+                  kanHel={intervallKap(dag, start, lengde) === 2 || mitt?.bane === 'hel'}
+                  valgt={mitt?.bane} onVelg={b => velg(dag, start, lengde, b)} />
               );
             })}
           </div>
@@ -489,11 +529,12 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
 
 // Én ledig time eller halvtime: tid til venstre, valg av banestørrelse med
 // pris til høyre. `lenke` deler en time i halvtimer eller slår dem sammen.
-function Tidsrad({ tid, under, dato, lengde = 60, kanHel, valgt, onVelg, lenke }: {
+function Tidsrad({ tid, under, dato, lengde = 60, kanHel, valgt, onVelg, lenke, lukket }: {
   tid: string;
   under?: string;
   dato: string;
   lengde?: number;
+  lukket?: boolean;
   kanHel: boolean;
   valgt?: Bane;
   onVelg: (b: Bane) => void;
@@ -501,7 +542,7 @@ function Tidsrad({ tid, under, dato, lengde = 60, kanHel, valgt, onVelg, lenke }
 }) {
   const prisFor = usePris();
   return (
-    <div className={`tl-ledig ${valgt ? 'valgt' : ''}`}>
+    <div className={`tl-ledig ${valgt ? 'valgt' : ''} ${lukket ? 'lukket' : ''}`}>
       <span className="tl-tid">
         {tid}
         {under && <small>{under}</small>}
@@ -509,7 +550,7 @@ function Tidsrad({ tid, under, dato, lengde = 60, kanHel, valgt, onVelg, lenke }
       </span>
       <span className="tl-valg">
         {(['hel', 'halv'] as Bane[]).map(b => (b === 'hel' && !kanHel) ? null : (
-          <button key={b} aria-pressed={valgt === b} className={valgt === b ? 'pa' : ''} onClick={() => onVelg(b)}>
+          <button key={b} aria-pressed={valgt === b} disabled={lukket} className={valgt === b ? 'pa' : ''} onClick={() => onVelg(b)}>
             {valgt === b && <Check size={15} />}
             <span>{b === 'hel' ? 'Hel' : 'Halv'}</span>
             <small>{kr(prisFor(b, dato, lengde))}</small>

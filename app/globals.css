@@ -575,3 +575,21 @@ main.innhold > h1 { font-size: 2.3rem; line-height: 1.08; color: var(--gronn); f
 /* «30 min» / «Hele timen»: del en ledig time i halvtimer eller slå sammen */
 .tl-del { justify-self: start; border: 0; background: none; padding: 2px 0 0; font-size: 0.78rem; font-weight: 500; color: var(--gronn); text-decoration: underline; text-underline-offset: 2px; }
 .tl-del:hover { color: var(--gronn-mork); }
+
+/* Dagens overskrift med varighetsvalget (1 time / 30 min) til høyre */
+.dag-hode { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 26px 0 10px; }
+.dag-hode .valgt-dag { margin: 0; }
+.segment.varighet { flex-shrink: 0; background: #fff; border: 1px solid var(--linje); border-radius: 999px; padding: 3px; }
+.segment.varighet button { border: 0; border-radius: 999px; margin: 0; padding: 6px 12px; font-size: 0.85rem; font-weight: 600; color: var(--gronn); background: transparent; }
+.segment.varighet button.pa { background: var(--gronn); color: var(--gul); }
+.visning + .hjelp { margin: 10px 0 14px; }
+@media (max-width: 480px) {
+  .dag-hode { margin-top: 20px; }
+  .dag-hode .valgt-dag { font-size: 1.15rem; }
+  .segment.varighet button { padding: 5px 10px; font-size: 0.8rem; }
+}
+
+/* Halvtime som bare kan legges til en valgt time ved siden av */
+.tl-ledig.lukket .tl-valg button { opacity: 0.4; cursor: not-allowed; }
+.tl-ledig.lukket .tl-valg button:hover { background: #fff; }
+.dagbrikke.valgt:hover:not(:disabled) { background: var(--gronn); }
