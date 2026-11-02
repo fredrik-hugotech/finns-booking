@@ -469,10 +469,31 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
                   return ds.length > 0 && ds.every(x => valgtPaa(x, start, lengde)?.bane === b);
                 });
                 const ikke = valgtBane ? f.kommende.filter(x => !(valgtBane === 'hel' ? f.hel : f.halv).includes(x)) : [];
+                // Forleng den faste tida med en halvtime de ukene halvtimen er ledig.
+                const valgteUker = valgtBane ? (valgtBane === 'hel' ? f.hel : f.halv) : [];
+                const forlengFast = (s: number) => valgteUker.filter(x => intervallKap(x, s, 30) >= halvdeler(valgtBane!)
+                  && !valgt.some(v => v.dato === x && startAv(v) <= s && s < startAv(v) + v.lengde));
+                const for_ = lengde === 60 && valgtBane ? forlengFast(start - 30) : [];
+                const etter = lengde === 60 && valgtBane ? forlengFast(start + 60) : [];
+                // Halvtimer som alt er lagt til, vises på raden og kan tas bort igjen.
+                const lagtTil = (s: number) => {
+                  const uker = valgteUker.filter(x => valgtPaa(x, s, 30));
+                  return uker.length * 2 >= valgteUker.length ? uker : [];
+                };
+                const harFor = lagtTil(start - 30);
+                const harEtter = lagtTil(start + 60);
+                const lenker = [
+                  ...(harFor.length ? [{ tekst: '− 30 min før', onClick: () => velgFast(harFor, start - 30, 30, valgtBane!) }]
+                    : for_.length > 0 && for_.length * 2 >= valgteUker.length ? [{ tekst: '+30 min før', onClick: () => velgFast(for_, start - 30, 30, valgtBane!) }] : []),
+                  ...(harEtter.length ? [{ tekst: '− 30 min etter', onClick: () => velgFast(harEtter, start + 60, 30, valgtBane!) }]
+                    : etter.length > 0 && etter.length * 2 >= valgteUker.length ? [{ tekst: '+30 min etter', onClick: () => velgFast(etter, start + 60, 30, valgtBane!) }] : []),
+                ];
+                const visFra = harFor.length ? start - 30 : start;
+                const visTil = start + lengde + (harEtter.length ? 30 : 0);
                 const uker = `Ledig ${f.halv.length} av ${f.kommende.length} uker`;
                 return (
                   <Fragment key={start}>
-                    <Tidsrad tid={tidKort(start, start + lengde)} dato={fastDato} lengde={lengde}
+                    <Tidsrad tid={tidKort(visFra, visTil)} dato={fastDato} lengde={lengde} lenker={lenker}
                       under={[under, f.hel.length >= 2 && f.hel.length < f.halv.length ? `${uker} · hel bane ${f.hel.length}` : uker].filter(Boolean).join(' · ')}
                       lukket={lengde === 30 && !valgtBane && !vedSiden(f.kommende)}
                       kanHel={f.hel.length >= 2} valgt={valgtBane}
@@ -500,8 +521,15 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
                 );
               }
               const mitt = valgtPaa(dag, start, lengde);
+              // En valgt time kan forlenges med en halvtime før eller etter, når den er ledig.
+              const forleng = (d: string, s: number, bane: Bane) =>
+                halvKap(d, s) >= halvdeler(bane) && !valgt.some(v => v.dato === d && startAv(v) <= s && s < startAv(v) + v.lengde);
+              const lenker = mitt && lengde === 60 ? [
+                ...(forleng(dag, start - 30, mitt.bane) ? [{ tekst: '+30 min før', onClick: () => velg(dag, start - 30, 30, mitt.bane) }] : []),
+                ...(forleng(dag, start + 60, mitt.bane) ? [{ tekst: '+30 min etter', onClick: () => velg(dag, start + 60, 30, mitt.bane) }] : []),
+              ] : [];
               return (
-                <Tidsrad key={start} tid={tidKort(start, start + lengde)} under={under} dato={dag} lengde={lengde}
+                <Tidsrad key={start} tid={tidKort(start, start + lengde)} under={under} dato={dag} lengde={lengde} lenker={lenker}
                   lukket={lengde === 30 && !mitt && !vedSiden([dag])}
                   kanHel={intervallKap(dag, start, lengde) === 2 || mitt?.bane === 'hel'}
                   valgt={mitt?.bane} onVelg={b => velg(dag, start, lengde, b)} />
@@ -528,8 +556,8 @@ function Booking({ onPriser }: { onPriser: (p: Priser) => void }) {
 }
 
 // Én ledig time eller halvtime: tid til venstre, valg av banestørrelse med
-// pris til høyre. `lenke` deler en time i halvtimer eller slår dem sammen.
-function Tidsrad({ tid, under, dato, lengde = 60, kanHel, valgt, onVelg, lenke, lukket }: {
+// pris til høyre. `lenker` er små valg under tida, som «+30 min etter».
+function Tidsrad({ tid, under, dato, lengde = 60, kanHel, valgt, onVelg, lenker = [], lukket }: {
   tid: string;
   under?: string;
   dato: string;
@@ -538,7 +566,7 @@ function Tidsrad({ tid, under, dato, lengde = 60, kanHel, valgt, onVelg, lenke, 
   kanHel: boolean;
   valgt?: Bane;
   onVelg: (b: Bane) => void;
-  lenke?: { tekst: string; onClick: () => void };
+  lenker?: { tekst: string; onClick: () => void }[];
 }) {
   const prisFor = usePris();
   return (
@@ -546,7 +574,11 @@ function Tidsrad({ tid, under, dato, lengde = 60, kanHel, valgt, onVelg, lenke, 
       <span className="tl-tid">
         {tid}
         {under && <small>{under}</small>}
-        {lenke && <button type="button" className="tl-del" onClick={lenke.onClick}>{lenke.tekst}</button>}
+        {lenker.length > 0 && (
+          <span className="tl-lenker">
+            {lenker.map(l => <button key={l.tekst} type="button" className="tl-del" onClick={l.onClick}>{l.tekst}</button>)}
+          </span>
+        )}
       </span>
       <span className="tl-valg">
         {(['hel', 'halv'] as Bane[]).map(b => (b === 'hel' && !kanHel) ? null : (

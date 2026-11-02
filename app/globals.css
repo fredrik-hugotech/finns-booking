@@ -593,3 +593,4 @@ main.innhold > h1 { font-size: 2.3rem; line-height: 1.08; color: var(--gronn); f
 .tl-ledig.lukket .tl-valg button { opacity: 0.4; cursor: not-allowed; }
 .tl-ledig.lukket .tl-valg button:hover { background: #fff; }
 .dagbrikke.valgt:hover:not(:disabled) { background: var(--gronn); }
+.tl-lenker { display: flex; gap: 12px; }
