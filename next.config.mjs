@@ -1,15 +1,17 @@
 /** @type {import('next').NextConfig} */
+const ADRESSE = 'https://vinterbooking.finnsfairway.no';
+
 const nextConfig = {
   reactStrictMode: true,
-  // Den gamle bookingsiden (fjorårets) lå på finns-booking.vercel.app.
-  // Send alle derfra til det nye systemet, så ingen booker på feil sted.
+  // Bookingsiden har én adresse: vinterbooking.finnsfairway.no. Vercel-
+  // adressene (og fjorårets finns-booking.vercel.app) sender alle dit.
   async redirects() {
-    return [{
+    return ['finns-booking.vercel.app', 'finns-arena-booking.vercel.app'].map(host => ({
       source: '/:sti*',
-      has: [{ type: 'host', value: 'finns-booking.vercel.app' }],
-      destination: 'https://finns-arena-booking.vercel.app/:sti*',
+      has: [{ type: 'host', value: host }],
+      destination: `${ADRESSE}/:sti*`,
       permanent: false,
-    }];
+    }));
   },
 };
 export default nextConfig;

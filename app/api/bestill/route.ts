@@ -40,6 +40,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ feil: 'Velg mellom 1 og 150 timer.' }, { status: 400 });
   }
 
+  // Minste booking er 1 time: sammenhengende tider samme dag må bli minst
+  // 60 minutter til sammen. (Admin kan legge inn halvtimer alene.)
+  const sortert = [...linjer].sort((a, b) => a.dato.localeCompare(b.dato) || a.time * 60 + a.minutt - (b.time * 60 + b.minutt));
+  for (let i = 0; i < sortert.length;) {
+    let j = i + 1;
+    let slutt = sortert[i].time * 60 + sortert[i].minutt + sortert[i].lengde;
+    let sum = sortert[i].lengde;
+    while (j < sortert.length && sortert[j].dato === sortert[i].dato && sortert[j].time * 60 + sortert[j].minutt === slutt) {
+      slutt += sortert[j].lengde;
+      sum += sortert[j].lengde;
+      j++;
+    }
+    if (sum < 60) {
+      return NextResponse.json({ feil: 'Minste booking er 1 time. En halvtime kan bare legges til rett før eller etter en time.' }, { status: 400 });
+    }
+    i = j;
+  }
+
   try {
     // Egne holdte timer er ledige for denne økta; andres teller som opptatt.
     const okt = gyldigOkt(body.okt) ? body.okt : undefined;
