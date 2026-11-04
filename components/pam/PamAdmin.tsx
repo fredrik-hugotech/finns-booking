@@ -77,7 +77,16 @@ function Panel({ meg, onUt }: { meg: PamBruker; onUt: () => void }) {
     if (r.status === 401) return onUt();
     setArrangementer(r.data.arrangementer ?? []);
   }
-  useEffect(() => { last(); }, []);
+  // Hold tallene ferske når backoffice står åpen: hvert minutt og når fanen får fokus igjen.
+  const [tikk, setTikk] = useState(0);
+  useEffect(() => {
+    last();
+    const oppdater = () => { if (document.visibilityState === 'visible') setTikk(t => t + 1); };
+    const t = setInterval(oppdater, 60_000);
+    document.addEventListener('visibilitychange', oppdater);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', oppdater); };
+  }, []);
+  useEffect(() => { if (tikk) last(); }, [tikk]);
 
   async function loggUt() {
     await json('DELETE', '/api/pam/login');
@@ -148,6 +157,7 @@ function Panel({ meg, onUt }: { meg: PamBruker; onUt: () => void }) {
           <MenyVisning
             meny={meny}
             admin={admin}
+            tikk={tikk}
             del={del}
             setDel={id => { setDel(id); setMelding(null); }}
             onRediger={a => setRedigerer({ a, meny })}
@@ -203,8 +213,8 @@ function Oversikt({ menyer, admin, meg, onVelg, onNy }: {
   );
 }
 
-function MenyVisning({ meny, admin, del, setDel, onRediger, onNyDel, onEndret, setMelding }: {
-  meny: Meny; admin: boolean; del: string | null; setDel: (id: string) => void;
+function MenyVisning({ meny, admin, tikk, del, setDel, onRediger, onNyDel, onEndret, setMelding }: {
+  meny: Meny; admin: boolean; tikk: number; del: string | null; setDel: (id: string) => void;
   onRediger: (a: Arrangement) => void; onNyDel: () => void; onEndret: () => Promise<void>; setMelding: (m: Melding) => void;
 }) {
   const a = meny.arrangementer.find(x => x.id === del) ?? meny.arrangementer[0];
@@ -228,13 +238,13 @@ function MenyVisning({ meny, admin, del, setDel, onRediger, onNyDel, onEndret, s
           ))}
         </div>
       )}
-      <Detalj key={a.id} a={a} admin={admin} onRediger={() => onRediger(a)} onEndret={onEndret} setMelding={setMelding} />
+      <Detalj key={a.id} a={a} admin={admin} tikk={tikk} onRediger={() => onRediger(a)} onEndret={onEndret} setMelding={setMelding} />
     </>
   );
 }
 
-function Detalj({ a, admin, onRediger, onEndret, setMelding }: {
-  a: Arrangement; admin: boolean; onRediger: () => void; onEndret: () => Promise<void>; setMelding: (m: Melding) => void;
+function Detalj({ a, admin, tikk, onRediger, onEndret, setMelding }: {
+  a: Arrangement; admin: boolean; tikk: number; onRediger: () => void; onEndret: () => Promise<void>; setMelding: (m: Melding) => void;
 }) {
   const [svar, setSvar] = useState<Svar[] | null>(null);
   const [sok, setSok] = useState('');
@@ -243,7 +253,9 @@ function Detalj({ a, admin, onRediger, onEndret, setMelding }: {
     const r = await json('GET', `/api/pam/svar?arrangement=${a.id}`);
     setSvar(r.data.svar ?? []);
   }
-  useEffect(() => { last(); }, [a.id]);
+  useEffect(() => { last(); }, [a.id, tikk]);
+  // Fanene og menyen viser tall fra oversikten; hent den på nytt så de stemmer med tabellen.
+  useEffect(() => { onEndret(); }, [a.id]);
 
   const q = sok.trim().toLowerCase();
   const vist = useMemo(() => [...(svar ?? [])].reverse().filter(s => !q || Object.values(s.data).join(' ').toLowerCase().includes(q)), [svar, q]);
