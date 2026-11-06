@@ -68,7 +68,8 @@ function Panel({ meg, onUt }: { meg: Bruker; onUt: () => void }) {
       await last();
       return false;
     }
-    if (ok) setMelding({ tekst: ok });
+    const svar = await r.json().catch(() => ({}));
+    if (svar.melding || ok) setMelding({ tekst: svar.melding ?? ok, feil: /Fikk ikke|ingen e-post/.test(svar.melding ?? '') });
     await last();
     return true;
   };
@@ -264,7 +265,7 @@ function NyBooking({ dato, start, lengde, kanHel, api, onFerdig }: {
   dato: string; start: number; lengde: number; kanHel: boolean; api: Api; onFerdig: () => void;
 }) {
   const prisFor = usePris();
-  const [f, setF] = useState({ navn: '', telefon: '', epost: '', klubb: '', bane: (kanHel ? 'hel' : 'halv') as Bane, start, lengde });
+  const [f, setF] = useState({ navn: '', telefon: '', epost: '', klubb: '', bane: (kanHel ? 'hel' : 'halv') as Bane, start, lengde, sendEpost: true });
   async function lagre(e: React.FormEvent) {
     e.preventDefault();
     const { start: s, ...resten } = f;
@@ -283,6 +284,11 @@ function NyBooking({ dato, start, lengde, kanHel, api, onFerdig }: {
         <label>Fra<select value={f.start} onChange={e => setF({ ...f, start: Number(e.target.value) })}>{HALVTIMER.map(s => <option key={s} value={s}>{klokke(s)}</option>)}</select></label>
         <label>Lengde<select value={f.lengde} onChange={e => setF({ ...f, lengde: Number(e.target.value) })}><option value={60}>1 time</option><option value={30}>30 min</option></select></label>
       </div>
+      {f.epost.trim() && (
+        <label className="avkryss">
+          <input type="checkbox" checked={f.sendEpost} onChange={e => setF({ ...f, sendEpost: e.target.checked })} /> Send bekreftelse på e-post
+        </label>
+      )}
       <div className="adm-handlinger">
         <span className="segment">
           {(['hel', 'halv'] as Bane[]).map(b => (
@@ -386,6 +392,7 @@ function Kalender({ dag, setDag, bestillinger, alle, sperringer, klubbtider, api
 function Bestillingskort({ linjer, alle, api, onDag }: { linjer: Bestilling[]; alle: Bestilling[]; api: Api; onDag: (d: string) => void }) {
   const f = linjer[0];
   const ventende = linjer.filter(l => l.status === 'forespurt');
+  const harBekreftet = linjer.some(l => l.status === 'bekreftet');
   const sum = linjer.reduce((s, l) => s + l.pris, 0);
   return (
     <section className="kort gruppe">
@@ -412,6 +419,13 @@ function Bestillingskort({ linjer, alle, api, onDag }: { linjer: Bestilling[]; a
           <button className="knapp sekundar" onClick={() => {
             if (window.confirm(`Avslå hele bestillingen fra ${f.navn}?`)) api('PATCH', '/api/admin/bestillinger', { ider: ventende.map(l => l.id), status: 'avlyst' }, 'Avslått.');
           }}>Avslå</button>
+        </div>
+      )}
+      {ventende.length === 0 && harBekreftet && f.epost && (
+        <div className="handlinger">
+          <button className="liten-knapp" onClick={() => {
+            if (window.confirm(`Sende bekreftelsen på nytt til ${f.epost}?`)) api('POST', '/api/admin/bekreftelse', { ref: f.ref });
+          }}><Mail size={14} /> Send bekreftelse på nytt</button>
         </div>
       )}
     </section>
