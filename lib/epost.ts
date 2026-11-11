@@ -3,15 +3,15 @@ import { ARENA } from './config';
 import { kr, langDato } from './dato';
 import { lengdeAv, startAv, tidFor, varighet, type Bestilling } from './tilgjengelighet';
 
-const NETTSIDE = 'https://vinterbooking.finnsfairway.no';
-const FRA = process.env.EPOST_FRA || 'Finns.Fairway <booking@hugo.as>';
+export const NETTSIDE = 'https://vinterbooking.finnsfairway.no';
+export const FRA = process.env.EPOST_FRA || 'Finns.Fairway <booking@hugo.as>';
 const SVAR_TIL = process.env.EPOST_SVAR_TIL || 'post@finnsfairway.no';
 
 export type Utsending = { sendt: boolean; til: string; feil?: string };
 
 export const epostErSattOpp = () => Boolean(process.env.RESEND_API_KEY);
 
-const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+export const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 function innhold(linjer: Bestilling[]) {
   const f = linjer[0];

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowDown, ArrowLeft, ArrowUp, ClipboardList, Download, History, KeyRound, LayoutGrid, Link2, Loader2, Lock, LogOut, Mail, Pencil, Plus, Trash2, UserCheck, UserX, Users, X,
+  ArrowDown, ArrowLeft, ArrowUp, Check, ClipboardList, Download, History, KeyRound, LayoutGrid, Link2, Loader2, Lock, LogOut, Mail, Pencil, Plus, Trash2, UserCheck, UserX, Users, X,
 } from 'lucide-react';
 import { FELTTYPER, PARTNERE, STANDARDFELTER, lagSlug, menyAv, menyer, navnPa, type Arrangement, type Felt, type Felttype, type Meny, type Svar } from '@/lib/pam/felter';
 import type { PamBruker, PamRolle } from '@/lib/pam/lager';
@@ -248,6 +248,9 @@ function Detalj({ a, admin, tikk, onRediger, onEndret, setMelding }: {
 }) {
   const [svar, setSvar] = useState<Svar[] | null>(null);
   const [sok, setSok] = useState('');
+  const [filter, setFilter] = useState<'alle' | 'venter' | 'plass'>('alle');
+  const [valgt, setValgt] = useState<Set<string>>(new Set());
+  const [bekreft, setBekreft] = useState(false);
 
   async function last() {
     const r = await json('GET', `/api/pam/svar?arrangement=${a.id}`);
@@ -258,7 +261,14 @@ function Detalj({ a, admin, tikk, onRediger, onEndret, setMelding }: {
   useEffect(() => { onEndret(); }, [a.id]);
 
   const q = sok.trim().toLowerCase();
-  const vist = useMemo(() => [...(svar ?? [])].reverse().filter(s => !q || Object.values(s.data).join(' ').toLowerCase().includes(q)), [svar, q]);
+  const vist = useMemo(() => [...(svar ?? [])].reverse()
+    .filter(s => filter === 'alle' || (filter === 'plass') === !!s.plass_bekreftet)
+    .filter(s => !q || Object.values(s.data).join(' ').toLowerCase().includes(q)), [svar, q, filter]);
+  const antPlass = (svar ?? []).filter(s => s.plass_bekreftet).length;
+  const kanVelges = vist.filter(s => !s.plass_bekreftet);
+  const alleValgt = kanVelges.length > 0 && kanVelges.every(s => valgt.has(s.id));
+  const velg = (id: string) => setValgt(v => { const n = new Set(v); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const velgAlle = () => setValgt(alleValgt ? new Set() : new Set(kanVelges.map(s => s.id)));
   const epostfelt = a.felter.filter(f => f.type === 'epost');
   const eposter = [...new Set((svar ?? []).flatMap(s => epostfelt.map(f => s.data[f.id]).filter(Boolean)))];
 
@@ -286,6 +296,7 @@ function Detalj({ a, admin, tikk, onRediger, onEndret, setMelding }: {
     <>
       <div className="tall">
         <div className="tallkort"><span>Påmeldt</span><strong>{svar?.length ?? '–'}</strong></div>
+        <div className="tallkort"><span>Har fått plass</span><strong>{svar ? `${antPlass} av ${svar.length}` : '–'}</strong></div>
         <div className="tallkort"><span>Status</span><strong className={`pam-tall-tekst ${a.aapen ? 'pam-apen' : ''}`}>{a.aapen ? 'Åpen' : 'Stengt'}</strong></div>
         <div className="tallkort"><span>Arrangør</span><strong className="pam-tall-tekst">{a.arrangor}</strong></div>
       </div>
@@ -299,6 +310,34 @@ function Detalj({ a, admin, tikk, onRediger, onEndret, setMelding }: {
           ? <button className="liten-knapp fare" onClick={() => settAapen(false)}><Lock size={14} /> Steng påmeldingen</button>
           : <button className="liten-knapp primar" onClick={() => settAapen(true)}>Åpne påmeldingen</button>)}
       </div>
+      {bekreft && svar && (
+        <BekreftPanel
+          a={a}
+          antall={svar.filter(s => valgt.has(s.id) && !s.plass_bekreftet).length}
+          ider={[...valgt]}
+          forste={svar.find(s => valgt.has(s.id) && !s.plass_bekreftet)}
+          onLukk={() => setBekreft(false)}
+          onSendt={async tekst => {
+            setBekreft(false);
+            setValgt(new Set());
+            setMelding({ tekst });
+            await last();
+          }}
+          setMelding={setMelding}
+        />
+      )}
+      {svar && svar.length > 0 && (
+        <div className="pam-filterlinje">
+          <div className="segment">
+            {([['alle', 'Alle', svar.length], ['venter', 'Venter på plass', svar.length - antPlass], ['plass', 'Har fått plass', antPlass]] as const).map(([k, navn, n]) => (
+              <button key={k} className={filter === k ? 'pa' : ''} onClick={() => { setFilter(k); setValgt(new Set()); }}>{navn} <small>{n}</small></button>
+            ))}
+          </div>
+          <button className="liten-knapp primar" disabled={!valgt.size} onClick={() => setBekreft(true)}>
+            <Mail size={14} /> {valgt.size ? `Gi plass til ${valgt.size} og send bekreftelse` : 'Kryss av hvem som får plass'}
+          </button>
+        </div>
+      )}
       {svar && svar.length > 0 && <input className="adm-sok" placeholder="Søk etter navn eller e-post" value={sok} onChange={e => setSok(e.target.value)} />}
       {!svar ? <div className="laster"><Loader2 className="spinn" size={18} /> Laster …</div>
         : !svar.length ? <div className="kort tomt">{a.aapen ? 'Ingen har meldt seg på ennå.' : 'Påmeldingen er stengt. Rediger skjemaet og åpne den når den er klar.'}</div>
@@ -307,6 +346,9 @@ function Detalj({ a, admin, tikk, onRediger, onEndret, setMelding }: {
             <table className="pam-tabell">
               <thead>
                 <tr>
+                  <th className="pam-velg">
+                    <input type="checkbox" aria-label="Velg alle som venter på plass" checked={alleValgt} disabled={!kanVelges.length} onChange={velgAlle} />
+                  </th>
                   {a.felter.map(f => <th key={f.id}>{f.navn}</th>)}
                   <th>Påmeldt</th>
                   <th aria-label="Slett" />
@@ -314,7 +356,12 @@ function Detalj({ a, admin, tikk, onRediger, onEndret, setMelding }: {
               </thead>
               <tbody>
                 {vist.map(s => (
-                  <tr key={s.id}>
+                  <tr key={s.id} className={valgt.has(s.id) ? 'pam-valgt' : ''}>
+                    <td className="pam-velg">
+                      {s.plass_bekreftet
+                        ? <span className="pam-plass" title={`Bekreftet av ${s.bekreftet_av ?? 'ukjent'}`}><Check size={14} /></span>
+                        : <input type="checkbox" aria-label={`Velg ${s.data.navn ?? ''}`} checked={valgt.has(s.id)} onChange={() => velg(s.id)} />}
+                    </td>
                     {a.felter.map(f => (
                       <td key={f.id} data-felt={f.navn}>
                         {f.type === 'epost' && s.data[f.id] ? <a href={`mailto:${s.data[f.id]}`}>{s.data[f.id]}</a>
@@ -322,7 +369,10 @@ function Detalj({ a, admin, tikk, onRediger, onEndret, setMelding }: {
                           : s.data[f.id] ?? ''}
                       </td>
                     ))}
-                    <td data-felt="Påmeldt" className="dempet">{tidspunkt(s.opprettet)}</td>
+                    <td data-felt="Påmeldt" className="dempet">
+                      {tidspunkt(s.opprettet)}
+                      {s.plass_bekreftet && <span className="pam-plasstekst">Fått plass {tidspunkt(s.plass_bekreftet)}</span>}
+                    </td>
                     <td><button className="ikonknapp liten" title="Slett" onClick={() => slett(s)}><Trash2 size={16} /></button></td>
                   </tr>
                 ))}
@@ -332,6 +382,54 @@ function Detalj({ a, admin, tikk, onRediger, onEndret, setMelding }: {
           </div>
         )}
     </>
+  );
+}
+
+// Skriv og send «Du har fått plass». Teksten kan endres; {navn} byttes med deltakerens navn.
+function BekreftPanel({ a, antall, ider, forste, onLukk, onSendt, setMelding }: {
+  a: Arrangement; antall: number; ider: string[]; forste?: Svar;
+  onLukk: () => void; onSendt: (tekst: string) => void; setMelding: (m: Melding) => void;
+}) {
+  const [m, setM] = useState<{ emne: string; tekst: string; kanSende?: boolean } | null>(null);
+  const [sender, setSender] = useState(false);
+  useEffect(() => { json('GET', `/api/pam/bekreft?arrangement=${a.id}`).then(r => setM(r.data)); }, [a.id]);
+  const navn = forste?.data.navn || 'Ola Nordmann';
+
+  async function send() {
+    if (!m || !window.confirm(`Sende «Du har fått plass» til ${antall} ${antall === 1 ? 'påmelding' : 'påmeldinger'}?`)) return;
+    setSender(true);
+    const r = await json('POST', '/api/pam/bekreft', { arrangement: a.id, ider, emne: m.emne, tekst: m.tekst });
+    setSender(false);
+    if (r.data.tekst && r.status !== 502) onSendt(r.data.tekst);
+    else setMelding({ tekst: r.data.feil ?? r.data.tekst ?? 'Noe gikk galt.', feil: true });
+  }
+
+  return (
+    <section className="kort pam-bekreft">
+      <div className="pam-bekreft-hode">
+        <h2><Mail size={18} /> Gi plass til {antall} og send bekreftelse</h2>
+        <button className="ikonknapp liten" title="Lukk" onClick={onLukk}><X size={16} /></button>
+      </div>
+      {!m ? <div className="laster"><Loader2 className="spinn" size={18} /></div> : (
+        <div className="skjema">
+          <label>Emne<input value={m.emne} onChange={e => setM({ ...m, emne: e.target.value })} /></label>
+          <label>Tekst<textarea rows={8} value={m.tekst} onChange={e => setM({ ...m, tekst: e.target.value })} /></label>
+          <p className="dempet pam-hint">{'{navn}'} byttes med navnet til hver deltaker. E-posten går til e-postadressen i påmeldingen, og svar kommer til deg.</p>
+          <div className="pam-forhand">
+            <span className="dempet">Slik ser den ut for {navn}:</span>
+            <strong>{m.emne.replace(/\{navn\}/g, navn)}</strong>
+            <p>{m.tekst.replace(/\{navn\}/g, navn)}</p>
+          </div>
+          {m.kanSende === false && <div className="banner feil">E-post er ikke satt opp på denne adressen ennå, så bekreftelser kan ikke sendes herfra.</div>}
+          <div className="adm-handlinger">
+            <button className="liten-knapp primar" disabled={sender || !antall || m.kanSende === false} onClick={send}>
+              {sender ? <><Loader2 size={14} className="spinn" /> Sender …</> : <><Mail size={14} /> Send til {antall}</>}
+            </button>
+            <button className="liten-knapp" onClick={onLukk}>Avbryt</button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -423,7 +521,7 @@ function Rediger({ a, meny, alle, onAvbryt, onLagret }: {
             <li key={i} className="adm-skjema">
               <div className="pam-felt-rad">
                 <label>Spørsmål<input required value={f.navn} onChange={e => settFelt(i, { navn: e.target.value })} /></label>
-                <label>Type<select value={f.type} onChange={e => settFelt(i, { type: e.target.value as Felttype })}>
+                <label>Type<select value={f.type} onChange={e => settFelt(i, { type: e.target.value as Felttype, ...(e.target.value === 'kjonn' && !f.navn ? { navn: 'Kjønn' } : {}) })}>
                   {(Object.keys(FELTTYPER) as Felttype[]).map(t => <option key={t} value={t}>{FELTTYPER[t]}</option>)}
                 </select></label>
                 <span className="pam-felt-knapper">

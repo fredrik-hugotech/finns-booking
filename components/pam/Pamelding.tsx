@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
-import { PARTNERE, arskullFor, lagSlug, sjekkSvar, type Arrangement, type Felt } from '@/lib/pam/felter';
+import { PARTNERE, arskullFor, lagSlug, sjekkSvar, valgFor, type Arrangement, type Felt } from '@/lib/pam/felter';
 
 const fanenokkel = (a: Arrangement) => lagSlug(a.fane || a.slug);
 
@@ -137,11 +137,11 @@ function FeltInput({ f, verdi, feil, onEndre }: { f: Felt; verdi: string; feil?:
   const id = `f-${f.id}`;
   const felles = { id, value: verdi, 'aria-invalid': !!feil, className: feil ? 'ugyldig' : undefined };
   let input: React.ReactNode;
-  if (f.type === 'arskull' || f.type === 'valg') {
-    const valg = f.type === 'arskull' ? arskullFor(f).map(String) : f.valg ?? [];
+  if (f.type === 'arskull' || f.type === 'valg' || f.type === 'kjonn') {
+    const valg = f.type === 'arskull' ? arskullFor(f).map(String) : valgFor(f);
     input = (
       <select {...felles} onChange={e => onEndre(e.target.value)}>
-        <option value="" disabled>{f.type === 'arskull' ? 'Velg årskull' : 'Velg'}</option>
+        <option value="" disabled>{f.type === 'arskull' ? 'Velg årskull' : f.type === 'kjonn' ? 'Velg kjønn' : 'Velg'}</option>
         {valg.map(v => <option key={v} value={v}>{v}</option>)}
       </select>
     );

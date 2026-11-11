@@ -118,6 +118,17 @@ export async function slettSvar(id: string): Promise<void> {
   await rpc('pam_slett_svar', { p_id: id });
 }
 
+// Gi plass: markerer svarene som bekreftet. Svar som alt er bekreftet blir ikke endret.
+export async function bekreftSvar(ider: string[], av: string): Promise<Svar[]> {
+  if (erDemo()) {
+    const naa = new Date().toISOString();
+    const nye = demo().svar.filter(s => ider.includes(s.id) && !s.plass_bekreftet);
+    for (const s of nye) Object.assign(s, { plass_bekreftet: naa, bekreftet_av: av });
+    return nye;
+  }
+  return rpc<Svar[]>('pam_bekreft_svar', { p_ider: ider, p_av: av });
+}
+
 export async function hentBruker(sok: { id?: string; epost?: string }): Promise<PamBrukerMedHash | null> {
   if (erDemo()) {
     return demo().brukere.find(b => (sok.id && b.id === sok.id) || (sok.epost && b.epost === sok.epost.toLowerCase())) ?? null;

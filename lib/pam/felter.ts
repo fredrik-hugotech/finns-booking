@@ -1,7 +1,7 @@
 // Påmeldingsskjemaer: feltene et arrangement spør om, og sjekk av svarene.
 // Brukes både i nettleseren og på serveren.
 
-export type Felttype = 'tekst' | 'epost' | 'telefon' | 'arskull' | 'valg' | 'langtekst';
+export type Felttype = 'tekst' | 'epost' | 'telefon' | 'arskull' | 'kjonn' | 'valg' | 'langtekst';
 
 export type Felt = {
   id: string;
@@ -29,13 +29,17 @@ export type Arrangement = {
   antall?: number;
 };
 
-export type Svar = { id: string; arrangement_id: string; data: Record<string, string>; opprettet: string };
+export type Svar = {
+  id: string; arrangement_id: string; data: Record<string, string>; opprettet: string;
+  plass_bekreftet?: string | null; bekreftet_av?: string | null;
+};
 
 export const FELTTYPER: Record<Felttype, string> = {
   tekst: 'Tekst',
   epost: 'E-post',
   telefon: 'Telefon',
   arskull: 'Årskull',
+  kjonn: 'Kjønn',
   valg: 'Valg fra liste',
   langtekst: 'Lang tekst',
 };
@@ -51,6 +55,11 @@ export const STANDARDFELTER: Felt[] = [
 ];
 
 const EPOST = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+export const KJONN = ['Jente', 'Gutt'];
+
+// Alternativene i en nedtrekksliste: faste for kjønn, egne for «valg fra liste».
+export const valgFor = (f: Felt) => (f.type === 'kjonn' ? KJONN : f.valg ?? []);
 
 export const navnPa = (a: Pick<Arrangement, 'tittel' | 'fane'>) => (a.fane ? `${a.tittel} – ${a.fane}` : a.tittel);
 
@@ -96,13 +105,13 @@ export function sjekkSvar(felter: Felt[], inn: Record<string, unknown>): { data:
     const maks = f.type === 'langtekst' ? 2000 : 200;
     const v = typeof inn[f.id] === 'string' ? (inn[f.id] as string).trim().slice(0, maks) : '';
     if (!v) {
-      if (f.pakrevd) feil[f.id] = f.type === 'valg' || f.type === 'arskull' ? `Velg ${f.navn.toLowerCase()}.` : `Fyll inn ${f.navn.toLowerCase()}.`;
+      if (f.pakrevd) feil[f.id] = f.type === 'valg' || f.type === 'arskull' || f.type === 'kjonn' ? `Velg ${f.navn.toLowerCase()}.` : `Fyll inn ${f.navn.toLowerCase()}.`;
       continue;
     }
     if (f.type === 'epost' && !EPOST.test(v)) feil[f.id] = 'Skriv inn en gyldig e-postadresse.';
     else if (f.type === 'telefon' && v.replace(/\D/g, '').length < 8) feil[f.id] = 'Skriv inn et gyldig telefonnummer.';
     else if (f.type === 'arskull' && !arskullFor(f).includes(Number(v))) feil[f.id] = 'Velg et årskull fra lista.';
-    else if (f.type === 'valg' && !(f.valg ?? []).includes(v)) feil[f.id] = 'Velg fra lista.';
+    else if ((f.type === 'valg' || f.type === 'kjonn') && !valgFor(f).includes(v)) feil[f.id] = 'Velg fra lista.';
     data[f.id] = f.type === 'epost' ? v.toLowerCase() : v;
   }
   return { data, feil };
@@ -139,10 +148,11 @@ export function sjekkFelter(inn: unknown): Felt[] | string {
 // Excel i Norge forventer semikolon og BOM for å vise æøå riktig.
 export function tilCsv(felter: Felt[], svar: Svar[]): string {
   const celle = (v: string) => (/[";\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-  const hode = ['Tidspunkt', ...felter.map(f => f.navn)];
+  const hode = ['Tidspunkt', ...felter.map(f => f.navn), 'Plass bekreftet'];
   const rader = svar.map(s => [
     new Date(s.opprettet).toLocaleString('nb-NO', { timeZone: 'Europe/Oslo' }),
     ...felter.map(f => s.data[f.id] ?? ''),
+    s.plass_bekreftet ? new Date(s.plass_bekreftet).toLocaleString('nb-NO', { timeZone: 'Europe/Oslo' }) : '',
   ]);
   return '﻿' + [hode, ...rader].map(r => r.map(celle).join(';')).join('\r\n');
 }
