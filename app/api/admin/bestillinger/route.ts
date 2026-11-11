@@ -6,13 +6,8 @@ import {
 import { FORSTE_TIME, SISTE_TIME } from '@/lib/config';
 import { byggBelegg, halvdeler, ledigIntervall, prisFor, tidFor, type Bane, type Bestilling, type Status } from '@/lib/tilgjengelighet';
 import { erGyldigDato, langDato, naIOslo } from '@/lib/dato';
+import { beskriv, sendBekreftelser } from '@/lib/bekreftelse';
 
-// «SNAK-AB12C Ola Nordmann: tirsdag 1. desember 16:00–17:00 hel, …» for loggen.
-function beskriv(linjer: Pick<Bestilling, 'ref' | 'navn' | 'dato' | 'time' | 'minutt' | 'lengde' | 'bane'>[]) {
-  const forste = linjer[0];
-  const timer = linjer.slice(0, 6).map(l => `${langDato(l.dato)} ${tidFor(l)} ${l.bane}`).join(', ');
-  return `${forste.ref} ${forste.navn}: ${timer}${linjer.length > 6 ? ` og ${linjer.length - 6} timer til` : ''}`;
-}
 const STATUSLOGG: Record<Status, string> = { bekreftet: 'Bekreftet booking', avlyst: 'Fjernet booking', forespurt: 'Satte booking til venter' };
 
 export const dynamic = 'force-dynamic';
@@ -52,7 +47,10 @@ export async function PATCH(req: Request) {
       const for_ = (await hentBestillinger()).filter(b => ider.includes(b.id));
       await settStatus(ider, status);
       if (for_.length) await skrivLogg(meg, STATUSLOGG[status as Status], beskriv(for_));
-      return NextResponse.json({ ok: true });
+      // Bekreftelse på e-post når noe går fra «venter» til bekreftet.
+      const nye = status === 'bekreftet' ? [...new Set(for_.filter(b => b.status !== 'bekreftet').map(b => b.ref))] : [];
+      const epost = await sendBekreftelser(meg, nye);
+      return NextResponse.json({ ok: true, melding: epost ? `Bekreftet. ${epost}` : undefined });
     }
 
     const e = endringer ?? {};
@@ -128,7 +126,8 @@ export async function POST(req: Request) {
     }]);
     await settStatus(lagret.map(l => l.id), 'bekreftet');
     await skrivLogg(meg, 'La inn booking', beskriv(lagret));
-    return NextResponse.json({ ok: true });
+    const epost = b.sendEpost === true && lagret[0]?.epost ? await sendBekreftelser(meg, [lagret[0].ref]) : '';
+    return NextResponse.json({ ok: true, melding: epost ? `Booking lagt inn. ${epost}` : undefined });
   } catch (err) {
     if (err instanceof OpptattFeil) return NextResponse.json({ feil: 'Timen ble tatt i mellomtiden, eller noen holder på å booke den. Prøv igjen om litt.' }, { status: 409 });
     throw err;
