@@ -59,13 +59,13 @@ export function Login({ demo, onInne }: { demo: boolean; onInne: (b: Bruker) => 
   );
 }
 
-export function MittPassord({ onFerdig }: { onFerdig?: () => void }) {
+export function MittPassord({ onFerdig, api = '/api/admin' }: { onFerdig?: () => void; api?: string }) {
   const [f, setF] = useState({ gammelt: '', nytt: '', igjen: '' });
   const [melding, setMelding] = useState<{ tekst: string; feil?: boolean } | null>(null);
   async function lagre(e: React.FormEvent) {
     e.preventDefault();
     if (f.nytt !== f.igjen) return setMelding({ tekst: 'De to nye passordene er ikke like.', feil: true });
-    const r = await fetch('/api/admin/meg', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ gammelt: f.gammelt, nytt: f.nytt }) });
+    const r = await fetch(`${api}/meg`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ gammelt: f.gammelt, nytt: f.nytt }) });
     if (r.ok) {
       setF({ gammelt: '', nytt: '', igjen: '' });
       setMelding({ tekst: 'Passordet er byttet.' });
@@ -87,7 +87,7 @@ export function MittPassord({ onFerdig }: { onFerdig?: () => void }) {
 }
 
 // Viser et nytt passord én gang, med knapp for å kopiere.
-function NyttPassord({ hvem, passord, onLukk }: { hvem: string; passord: string; onLukk: () => void }) {
+export function NyttPassord({ hvem, passord, onLukk }: { hvem: string; passord: string; onLukk: () => void }) {
   const [kopiert, setKopiert] = useState(false);
   return (
     <div className="nytt-passord">
@@ -318,13 +318,13 @@ export function Innsyn({ bruker, onUt }: { bruker: Bruker; onUt: () => void }) {
 }
 
 // Logg over alt som skjer i backoffice, nyeste først, med søk.
-export function Logg() {
+export function Logg({ api = '/api/admin' }: { api?: string }) {
   const [rader, setRader] = useState<Loggrad[] | null>(null);
   const [sok, setSok] = useState('');
   const [hvem, setHvem] = useState('');
 
   useEffect(() => {
-    fetch('/api/admin/logg', { cache: 'no-store' }).then(r => r.json()).then(j => setRader(j.logg ?? []));
+    fetch(`${api}/logg`, { cache: 'no-store' }).then(r => r.json()).then(j => setRader(j.logg ?? []));
   }, []);
 
   const personer = useMemo(() => [...new Set((rader ?? []).map(r => r.hvem))].sort(), [rader]);
